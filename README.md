@@ -1,5 +1,12 @@
 # GaussMark
 
+[![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-blue)](package.json)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Node.js: 22.16+](https://img.shields.io/badge/Node.js-22.16%2B-339933?logo=nodedotjs&logoColor=white)](#run-locally)
+[![PlayCanvas: 2.23.3](https://img.shields.io/badge/PlayCanvas-2.23.3-E05F2C?logo=playcanvas&logoColor=white)](package.json)
+[![Rendering: WebGPU / WebGL2](https://img.shields.io/badge/rendering-WebGPU%20%2F%20WebGL2-7952B3)](#what-works)
+[![Core: Rust + WebAssembly](https://img.shields.io/badge/core-Rust%20%2B%20WebAssembly-654FF0?logo=webassembly&logoColor=white)](#rebuild-the-rustwasm-module)
+
 A working, local-first Gaussian rendering laboratory. Next.js / React / TypeScript, PlayCanvas, Rust / WebAssembly, and a Cloudflare Workers / D1 results service. MIT licensed.
 
 ![The benchmark workspace](docs/screenshots/benchmark-dark.png)
