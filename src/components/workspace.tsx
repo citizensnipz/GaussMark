@@ -29,6 +29,7 @@ import { loadWasm, spatialBenchmark } from "@/core/wasm";
 import { readSessions, saveSession, downloadResult } from "@/core/storage";
 import type {
   BenchmarkResult,
+  CameraPath,
   Category,
   GraphicsApi,
   LoadMetrics,
@@ -41,7 +42,10 @@ import reference from "../../public/scenes/orbital-v1.json";
 import { Footer, Header, Metric, bytes, ms } from "./ui";
 import { FrameChart, Histogram } from "./charts";
 import { Report } from "./report";
-
+import { CameraPathEditor } from "./camera-path-editor";
+import { SaveComparison } from "./comparison";
+import { readComparison } from "@/core/comparison";
+import type { Rotation } from "@/renderers/controls";
 const SAMPLE: Scene = {
   id: reference.id,
   version: reference.version,
@@ -100,6 +104,45 @@ export function Workspace() {
     busyRef = useRef(false),
     mounted = useRef(true),
     [generation, setGeneration] = useState(0);
+  const [renderer, setRenderer] = useState("PlayCanvas");
+  const [gizmoVisible, setGizmoVisible] = useState(true);
+  const [cameraPath, setCameraPath] = useState<CameraPath>();
+  const [rotation, setRotation] = useState<Rotation>([0, 0, 0]);
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const [lockedTarget, setLockedTarget] = useState<{
+    width: number;
+    height: number;
+  } | null>(null);
+  const [comparisonMessage, setComparisonMessage] = useState("");
+  const controlsRef = useRef({ gizmoVisible, rotation, cameraPath });
+  controlsRef.current = { gizmoVisible, rotation, cameraPath };
+  useEffect(() => {
+    adapter.current?.setGizmoVisible(gizmoVisible);
+    adapter.current?.setObjectRotation(rotation);
+    adapter.current?.setCameraPath(cameraPath);
+  }, [gizmoVisible, rotation, cameraPath]);
+  function useBaseline() {
+    const baseline = readComparison().A;
+    if (!baseline) {
+      setComparisonMessage("Save a completed run as A first.");
+      return;
+    }
+    setCameraPath(baseline.config.cameraPath);
+    setMotion(baseline.config.motion);
+    setDuration(baseline.config.durationSeconds);
+    setRepeats(baseline.config.repeats);
+    setScale(baseline.config.renderScale);
+    setRotation(baseline.config.objectRotation ?? [0, 0, 0]);
+    setLockedTarget({
+      width: baseline.config.width,
+      height: baseline.config.height,
+    });
+    setComparisonMessage(
+      scene.sha256 === baseline.scene.sha256
+        ? "A’s settings applied. Choose your renderer and run B."
+        : "A’s settings applied. Load the same scene file as A before running B.",
+    );
+  }
   const busy = runBusy || spatialBusy;
   busyRef.current = busy;
   useEffect(() => {
@@ -127,23 +170,49 @@ export function Workspace() {
     const controller = new AbortController();
     let current: RendererAdapter | undefined,
       off: () => void = () => {},
+      offError: () => void = () => {},
+      offRotation: () => void = () => {},
+      offPath: () => void = () => {},
       observer: ResizeObserver | undefined;
     setTelemetry(idle);
     setLoading(null);
     setError("");
     setResult(null);
     (async () => {
-      const { PlayCanvasAdapter } = await import("@/renderers/playcanvas");
-      if (controller.signal.aborted) return;
-      current = new PlayCanvasAdapter(api);
+      if (renderer === "WebSplatter") {
+        const { WebSplatterAdapter } = await import("@/renderers/websplatter");
+        if (controller.signal.aborted) return;
+        current = new WebSplatterAdapter();
+      } else {
+        const { PlayCanvasAdapter } = await import("@/renderers/playcanvas");
+        if (controller.signal.aborted) return;
+        current = new PlayCanvasAdapter(api);
+      }
       adapter.current = current;
+      offError =
+        current.onError?.((error) => {
+          if (controller.signal.aborted) return;
+          runner.current.stop();
+          setLoading(null);
+          setError(error.message);
+          setTelemetry((t) => ({
+            ...t,
+            phase: "error",
+            message: error.message,
+          }));
+        }) ?? (() => {});
       await current.initialize(canvas.current!);
       if (controller.signal.aborted) return;
+      offRotation = current.onRotationChange(setRotation);
+      offPath = current.onPathChange(setCameraPath);
       const resize = () => {
         const box = viewport.current?.getBoundingClientRect();
         if (!box || !current) return;
-        const width = Math.max(64, Math.round(box.width * scale)),
-          height = Math.max(64, Math.round(box.height * scale));
+        const width =
+            lockedTarget?.width ?? Math.max(64, Math.round(box.width * scale)),
+          height =
+            lockedTarget?.height ??
+            Math.max(64, Math.round(box.height * scale));
         current.resize(width, height);
         setDimensions({ width, height });
       };
@@ -153,6 +222,9 @@ export function Workspace() {
       setTelemetry({ ...idle, phase: "loading" });
       const loaded = await current.load(scene, controller.signal);
       if (controller.signal.aborted) return;
+      current.setGizmoVisible(controlsRef.current.gizmoVisible);
+      current.setObjectRotation(controlsRef.current.rotation);
+      current.setCameraPath(controlsRef.current.cameraPath);
       setLoading(loaded);
       setTelemetry({ ...idle, phase: "ready" });
       let previous = 0,
@@ -177,6 +249,7 @@ export function Workspace() {
       });
     })().catch((e) => {
       if (!controller.signal.aborted) {
+        current?.dispose();
         setError((e as Error).message);
         setTelemetry((t) => ({ ...t, phase: "error" }));
       }
@@ -185,11 +258,14 @@ export function Workspace() {
       controller.abort();
       runner.current.stop();
       off();
+      offError();
+      offRotation();
+      offPath();
       observer?.disconnect();
       current?.dispose();
       if (adapter.current === current) adapter.current = null;
     };
-  }, [api, scene, scale, generation]);
+  }, [api, renderer, scene, scale, generation, lockedTarget]);
   async function loadFile(f: File | undefined) {
     if (!f || busy) return;
     setError("");
@@ -217,7 +293,14 @@ export function Workspace() {
         return;
       }
     }
+    const digest = await crypto.subtle.digest("SHA-256", await f.arrayBuffer());
+    const sha256 = Array.from(new Uint8Array(digest), (n) =>
+      n.toString(16).padStart(2, "0"),
+    ).join("");
+    setRotation([0, 0, 0]);
+    setCameraPath(undefined);
     setScene({
+      sha256,
       id: "custom",
       version: "local",
       name: f.name,
@@ -245,6 +328,8 @@ export function Workspace() {
           repeats,
           ...dimensions,
           renderScale: scale,
+          objectRotation: rotation,
+          ...(cameraPath ? { cameraPath } : {}),
         },
         (t) => {
           if (mounted.current) setTelemetry(t);
@@ -314,17 +399,21 @@ export function Workspace() {
           <select
             aria-label="Renderer"
             disabled={busy}
-            defaultValue="PlayCanvas"
+            value={renderer}
+            onChange={(e) => {
+              setRenderer(e.target.value);
+              if (e.target.value === "WebSplatter") setApi("webgpu");
+            }}
           >
             <option>PlayCanvas</option>
-            <option disabled>WebSplatter · planned</option>
+            <option>WebSplatter</option>
           </select>
         </div>
         <div className="toolbar-field">
           <span>GRAPHICS API</span>
           <select
             aria-label="Graphics API"
-            disabled={busy}
+            disabled={busy || renderer === "WebSplatter"}
             value={api}
             onChange={(e) => setApi(e.target.value as GraphicsApi)}
           >
@@ -339,7 +428,10 @@ export function Workspace() {
             disabled={busy}
             value={scene.source === "reference" ? "reference" : "local"}
             onChange={(e) => {
-              if (e.target.value === "reference") setScene(SAMPLE);
+              if (e.target.value === "reference") {
+                setCameraPath(undefined);
+                setScene(SAMPLE);
+              }
             }}
           >
             <option value="reference">Orbital study · reference v1</option>
@@ -374,7 +466,10 @@ export function Workspace() {
             aria-label="Render scale"
             disabled={busy}
             value={scale}
-            onChange={(e) => setScale(Number(e.target.value))}
+            onChange={(e) => {
+              setScale(Number(e.target.value));
+              setLockedTarget(null);
+            }}
           >
             <option value={0.5}>50%</option>
             <option value={1}>100%</option>
@@ -437,7 +532,7 @@ export function Workspace() {
             }}
           >
             <canvas
-              key={`${api}-${generation}`}
+              key={`${renderer}-${api}-${generation}`}
               ref={canvas}
               aria-label="Interactive Gaussian scene"
               tabIndex={0}
@@ -458,6 +553,13 @@ export function Workspace() {
                 </span>
               </div>
               <div className="viewport-actions">
+                <button
+                  className="glass-button controls-toggle"
+                  aria-expanded={controlsOpen}
+                  onClick={() => setControlsOpen((v) => !v)}
+                >
+                  Scene controls
+                </button>
                 <button
                   className="glass-button"
                   aria-label="Reset camera"
@@ -482,6 +584,82 @@ export function Workspace() {
                 </button>
               </div>
             </div>
+            <div className="gizmo-toolbar" aria-label="Viewport tools">
+              <button
+                className="glass-button controls-toggle"
+                disabled={busy}
+                aria-pressed={gizmoVisible}
+                onClick={() => setGizmoVisible((v) => !v)}
+              >
+                Rotate object
+              </button>
+              <button
+                className="glass-button controls-toggle"
+                disabled={busy}
+                onClick={() => {
+                  setRotation([0, 0, 0]);
+                  adapter.current?.resetCamera();
+                }}
+              >
+                Reset view
+              </button>
+            </div>
+            {controlsOpen && (
+              <div className="scene-controls controls-reference">
+                <h3>{renderer} controls</h3>
+                <p>
+                  Click the viewport to focus. Keyboard movement works
+                  immediately.
+                </p>
+                <dl>
+                  <dt>W / A / S / D</dt>
+                  <dd>Move camera</dd>
+                  {renderer === "PlayCanvas" ? (
+                    <>
+                      <dt>Q / E</dt>
+                      <dd>Camera down / up</dd>
+                      <dt>Left drag</dt>
+                      <dd>Orbit scene</dd>
+                      <dt>Right drag</dt>
+                      <dd>Look around</dd>
+                      <dt>Middle / Shift + drag</dt>
+                      <dd>Pan camera</dd>
+                      <dt>F</dt>
+                      <dd>Frame scene</dd>
+                    </>
+                  ) : (
+                    <>
+                      <dt>Space / Ctrl</dt>
+                      <dd>Camera up / down</dd>
+                      <dt>Q / E</dt>
+                      <dd>Roll camera left / right</dd>
+                      <dt>Left drag</dt>
+                      <dd>Look around</dd>
+                      <dt>Right drag</dt>
+                      <dd>Pan camera</dd>
+                      <dt>Backtick / Esc</dt>
+                      <dd>Capture / release mouse</dd>
+                      <dt>R</dt>
+                      <dd>Reset camera</dd>
+                    </>
+                  )}
+                  <dt>Shift</dt>
+                  <dd>Move faster</dd>
+                  <dt>Wheel</dt>
+                  <dd>Zoom / move forward</dd>
+                  <dt>Red / green / blue rings</dt>
+                  <dd>Rotate object on X / Y / Z</dd>
+                  <dt>Shift + ring drag</dt>
+                  <dd>Snap rotation to 15°</dd>
+                  <dt>Focused ring + arrows</dt>
+                  <dd>Rotate 1° (Shift: 15°)</dd>
+                </dl>
+                <small>
+                  Rotation rings are GaussMark editor tools. They are hidden
+                  during measurement; saved object rotation is preserved.
+                </small>
+              </div>
+            )}
             <div className="axis-gizmo" aria-label="Coordinate orientation">
               <span>Y</span>
               <i />
@@ -492,7 +670,9 @@ export function Workspace() {
               <span>
                 {busy
                   ? "AUTOMATED CAMERA · INPUT LOCKED"
-                  : "DRAG TO ORBIT · SHIFT + DRAG TO PAN · SCROLL TO ZOOM"}
+                  : renderer === "WebSplatter"
+                    ? "WASD MOVE · SPACE/CTRL UP/DOWN · Q/E ROLL"
+                    : "DRAG TO ORBIT · RIGHT DRAG LOOK · WASD MOVE · Q/E DOWN/UP"}
               </span>
               <span>
                 {dimensions.width} × {dimensions.height} <i>·</i>{" "}
@@ -598,6 +778,42 @@ export function Workspace() {
             </span>
           </div>
           <div className="panel-content">
+            <div className="comparison-setup">
+              <button className="button" disabled={busy} onClick={useBaseline}>
+                Use saved A’s test settings
+              </button>
+              {lockedTarget && (
+                <button
+                  className="button"
+                  disabled={busy}
+                  onClick={() => setLockedTarget(null)}
+                >
+                  Unlock resolution
+                </button>
+              )}
+              <small role="status">
+                {comparisonMessage ||
+                  "Save A, switch renderer, then run and save B."}
+                {lockedTarget
+                  ? ` Target locked to ${lockedTarget.width} × ${lockedTarget.height}.`
+                  : ""}
+              </small>
+            </div>
+            {(category === "Motion" || category === "Overview") && (
+              <CameraPathEditor
+                path={cameraPath}
+                onChange={(p) => {
+                  setCameraPath(p);
+                  if (p?.mode === "frozen") setMotion("stationary");
+                  else if (p?.mode === "orbit") setMotion("orbit");
+                }}
+                adapter={adapter.current}
+                disabled={busy || !loading}
+                sceneKey={scene.sha256}
+                rotation={rotation}
+                onRotation={setRotation}
+              />
+            )}
             {category === "Overview" && (
               <>
                 <div className="section-label">
@@ -1010,6 +1226,7 @@ export function Workspace() {
             )}
           </div>
           <div className="panel-bottom">
+            {result && <SaveComparison key={result.id} result={result} />}
             {result ? (
               <div className="actions">
                 <button

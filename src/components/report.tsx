@@ -7,6 +7,7 @@ import { submissionPayload, submitResult } from "@/core/community";
 import { downloadResult } from "@/core/storage";
 import { FrameChart, Histogram } from "./charts";
 import { Metric, Modal, ms, bytes } from "./ui";
+import { SaveComparison } from "./comparison";
 export function Report({
   result,
   onClose,
@@ -51,6 +52,7 @@ export function Report({
           {result.renderer} {result.rendererVersion} · {result.device.browser} /{" "}
           {result.device.os} · {new Date(result.createdAt).toLocaleString()}
         </p>
+        {local && <SaveComparison key={result.id} result={result} />}
         <div className="report-metrics">
           <Metric
             label="Median FPS"
@@ -85,6 +87,14 @@ export function Report({
           <dd>
             {result.config.repeats} × {result.config.durationSeconds}s ·{" "}
             {result.config.warmupSeconds}s warm-up each · {result.config.motion}
+          </dd>
+          <dt>Camera setup</dt>
+          <dd>
+            {result.config.cameraPath?.mode === "orbit"
+              ? `Interior circle · center ${result.config.cameraPath.center.join(", ")} · radius ${result.config.cameraPath.radius} · height ${result.config.cameraPath.height}`
+              : result.config.cameraPath?.mode === "frozen"
+                ? `Frozen view · position ${result.config.cameraPath.eye.join(", ")}`
+                : "Automatic scene framing"}
           </dd>
           <dt>Asset</dt>
           <dd>

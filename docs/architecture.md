@@ -6,7 +6,7 @@ Next.js exports three static routes. Browser-only effects import PlayCanvas lazi
 
 The UI keeps the live viewport mounted across category changes. The context is disposed on scene/API/render-scale changes or navigation away. Static CSS tokens drive both themes; Tailwind v4 is configured through PostCSS. Charts use SVG and native controls rather than an animation-heavy charting package.
 
-Local session records include raw frame samples and remain in localStorage, at most 20 sessions. Export provides a full JSON record. Local custom filenames are anonymized to `Local scene` before persistence; the original filename exists only in active UI state. Input URLs and local-file contents never enter the submission payload.
+Local session records include raw frame samples and remain in localStorage, at most 20 sessions. Export provides a full JSON record. Local custom filenames are retained in reports, local storage and JSON exports. Community submission payloads anonymize them to `Local scene`. Input URLs and local-file contents never enter the submission payload.
 
 ## Worker + D1
 
@@ -31,3 +31,9 @@ No deployment was performed. With approval and Cloudflare credentials:
 5. Review current Cloudflare quotas, abuse controls and privacy/retention policy before running `wrangler deploy`.
 
 Static assets plus a small Worker/D1 database are intended to fit a small free-tier deployment; this is configuration preparation, not a quota guarantee or provisioning instruction executed by this build.
+
+## Shared navigation and A/B retention
+
+`src/renderers/controls.ts` owns orbit/fly input and canonical benchmark camera transforms for both adapters. `src/renderers/websplatter.ts` owns a dedicated WebGPU device and a cancellable PLY parsing worker, using pinned, locally bundled MIT sources in `vendor/websplatter`. Build adaptations and renderer defaults are documented there.
+
+`gaussmark.comparison.v1` stores two explicitly selected full results independently of `gaussmark.sessions.v1`. Saving A or B replaces only that slot and raises a local event to refresh the comparison. Local PLY/SOG uploads get a SHA-256 content identity, retained locally for matching and omitted from community submissions. Actual files are not persisted; original filenames are retained in local results. Reusing A copies protocol, object rotation and exact target dimensions; switching renderer retains the in-memory Blob URL.

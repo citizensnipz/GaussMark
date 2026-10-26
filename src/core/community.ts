@@ -29,10 +29,10 @@ export const submissionSchema = z
     createdAt: z.iso.datetime(),
     benchmarkVersion: z.literal("0.1.0"),
     methodology: z.literal("frame-interval-v1"),
-    renderer: z.literal("PlayCanvas"),
+    renderer: z.enum(["PlayCanvas", "WebSplatter"]),
     rendererVersion: z
       .string()
-      .regex(/^\d+\.\d+\.\d+$/)
+      .regex(/^(\d+\.\d+\.\d+|16bb06e-gaussmark\.1)$/)
       .max(30),
     api: z.enum(["webgl2", "webgpu"]),
     scene: z
@@ -58,6 +58,34 @@ export const submissionSchema = z
         width: z.number().int().min(64).max(8192),
         height: z.number().int().min(64).max(8192),
         renderScale: z.number().min(0.25).max(2),
+        cameraPath: z
+          .discriminatedUnion("mode", [
+            z
+              .object({
+                mode: z.literal("orbit"),
+                center: z.tuple([finite, finite, finite]),
+                radius: finite.positive().max(1000000),
+                height: finite,
+                startAngle: finite,
+              })
+              .strict(),
+            z
+              .object({
+                mode: z.literal("frozen"),
+                eye: z.tuple([finite, finite, finite]),
+                target: z.tuple([finite, finite, finite]),
+                up: z.tuple([finite, finite, finite]),
+              })
+              .strict(),
+          ])
+          .optional(),
+        objectRotation: z
+          .tuple([
+            finite.min(-180).max(180),
+            finite.min(-180).max(180),
+            finite.min(-180).max(180),
+          ])
+          .optional(),
       })
       .strict(),
     device: z
@@ -90,6 +118,18 @@ export const submissionSchema = z
   .superRefine((s, ctx) => {
     const issue = (message: string) =>
       ctx.addIssue({ code: "custom", message });
+    if (
+      s.renderer === "WebSplatter" &&
+      (s.api !== "webgpu" ||
+        s.scene.format !== "ply" ||
+        s.rendererVersion !== "16bb06e-gaussmark.1")
+    )
+      issue("Unsupported WebSplatter configuration");
+    if (
+      s.renderer === "PlayCanvas" &&
+      !/^\d+\.\d+\.\d+$/.test(s.rendererVersion)
+    )
+      issue("Invalid PlayCanvas version");
     if (
       s.repetitions.length !== s.config.repeats ||
       s.repetitions.reduce((n, r) => n + r.count, 0) !== s.stats.count
@@ -125,7 +165,15 @@ export type CommunityRecord = z.infer<typeof submissionSchema> & {
 };
 export function submissionPayload(r: BenchmarkResult): CommunityRecord {
   const { frames: _, invalidReason: __, ...rest } = r;
-  return submissionSchema.parse(rest);
+  // File hashes are used locally for A/B matching; keep custom hashes off the community API.
+  return submissionSchema.parse({
+    ...rest,
+    scene: {
+      ...rest.scene,
+      name: rest.scene.source === "local" ? "Local scene" : rest.scene.name,
+      sha256: rest.scene.source === "local" ? undefined : rest.scene.sha256,
+    },
+  });
 }
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ??

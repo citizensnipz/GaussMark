@@ -145,6 +145,7 @@ export function Dashboard() {
             options={[
               ["", "All renderers"],
               ["PlayCanvas", "PlayCanvas"],
+              ["WebSplatter", "WebSplatter"],
             ]}
           />
           <FilterSelect

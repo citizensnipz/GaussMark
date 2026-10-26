@@ -8,6 +8,7 @@ import type { BenchmarkResult } from "@/core/types";
 import { Header, Footer, Empty } from "./ui";
 import { ResultsTable } from "./dashboard";
 import { Report } from "./report";
+import { Comparison } from "./comparison";
 export function ResultsExplorer() {
   const [source, setSource] = useState<"local" | "community">("local"),
     [rows, setRows] = useState<(BenchmarkResult | CommunityRecord)[]>([]),
@@ -60,6 +61,7 @@ export function ResultsExplorer() {
             <ArrowUpRight size={15} />
           </Link>
         </div>
+        <Comparison />
         <div className="results-controls">
           <div className="segmented">
             <button

@@ -13,7 +13,10 @@
     "build:wasm": "wasm-pack build crates/gaussmark-core --target web --out-dir ../../public/wasm --release --no-pack && node scripts/finalize-wasm.mjs",
     "scene": "node scripts/generate-scene.mjs",
     "db:migrate": "node scripts/wrangler.mjs d1 migrations apply gaussmark --local",
-    "format": "prettier --write src worker tests scripts *.ts *.mjs *.json *.jsonc"
+    "format": "prettier --write src worker tests scripts *.ts *.mjs *.json *.jsonc",
+    "build:websplatter": "node scripts/build-websplatter.mjs",
+    "prebuild": "npm run build:websplatter",
+    "predev": "npm run build:websplatter"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -21,6 +24,7 @@
     "playcanvas": "2.23.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "wgpu-matrix": "^3.4.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {
@@ -30,7 +34,9 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@webgpu/types": "^0.1.74",
     "concurrently": "^9.2.1",
+    "esbuild": "^0.28.2",
     "prettier": "^3.9.10",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.9.3",

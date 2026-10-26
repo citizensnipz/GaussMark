@@ -18,3 +18,6 @@ Rust bindings use wasm-bindgen (MIT OR Apache-2.0). wasm-pack is also MIT OR Apa
 Playwright, Vitest, TypeScript, Prettier, Wrangler and associated build tools are development dependencies. WebSplatter is referenced in design notes only; none of its source, assets or branding are bundled in this version.
 
 The generated browser WASM is compiled from GaussMark's Rust core plus wasm-bindgen. It is not a downloaded third-party benchmark binary.
+
+## WebSplatter
+Pinned MIT source subset: revision 16bb06e86b8fb12193d4bb4cd2b0b3d4f3ab62be (see vendor/websplatter/LICENSE and README.md for exact revision and modifications). Source: https://github.com/websplatter/WebSplatter. Gaussian GPU pipeline and PLY parser used in the WebGPU adapter.

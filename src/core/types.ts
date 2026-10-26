@@ -42,6 +42,20 @@ export type LoadMetrics = {
   heapBefore: number | null;
   heapAfter: number | null;
 };
+export type CameraPath =
+  | {
+      mode: "orbit";
+      center: [number, number, number];
+      radius: number;
+      height: number;
+      startAngle: number;
+    }
+  | {
+      mode: "frozen";
+      eye: [number, number, number];
+      target: [number, number, number];
+      up: [number, number, number];
+    };
 export type RunConfig = {
   motion: MotionMode;
   durationSeconds: number;
@@ -50,6 +64,8 @@ export type RunConfig = {
   width: number;
   height: number;
   renderScale: number;
+  cameraPath?: CameraPath;
+  objectRotation?: [number, number, number];
 };
 export type DeviceInfo = {
   browser: string;
@@ -103,8 +119,19 @@ export interface RendererAdapter {
   resize(width: number, height: number): void;
   setCamera(progress: number, mode: MotionMode): void;
   resetCamera(): void;
+  setCameraPath(path: CameraPath | undefined): void;
+  captureCamera(): Extract<CameraPath, { mode: "frozen" }>;
+  previewCameraPath(): void;
+  onPathChange(callback: (path: CameraPath) => void): () => void;
   setInteractive(enabled: boolean): void;
+  setNavigation(mode: "orbit" | "fly", speed: number): void;
+  setObjectRotation(rotation: [number, number, number]): void;
+  setGizmoVisible(visible: boolean): void;
+  onRotationChange(
+    callback: (rotation: [number, number, number]) => void,
+  ): () => void;
   onFrame(callback: (time: number) => void): () => void;
+  onError?(callback: (error: Error) => void): () => void;
   getGpu(): string;
   dispose(): void;
 }

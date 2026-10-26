@@ -55,6 +55,7 @@ export class BenchmarkRunner {
     await loadWasm();
     if (document.visibilityState === "hidden")
       throw new Error("Keep this tab visible during measurement.");
+    adapter.setCameraPath(config.cameraPath);
     adapter.setInteractive(false);
     const frames: number[][] = [];
     let lastUi = 0;
@@ -119,7 +120,13 @@ export class BenchmarkRunner {
               phase === "measuring"
                 ? Math.min(1, elapsed / config.durationSeconds)
                 : 0;
-            adapter.setCamera(progress, config.motion);
+            try {
+              adapter.setCamera(progress, config.motion);
+            } catch (error) {
+              cleanup();
+              reject(error);
+              return;
+            }
             if (now - lastUi >= 250) {
               lastUi = now;
               onUpdate({
@@ -144,16 +151,7 @@ export class BenchmarkRunner {
       const repetitions = await Promise.all(frames.map(aggregate));
       const stats = await aggregate(frames.flat());
       const { url: _, ...metadata } = scene;
-      // Custom filenames can contain personal information; do not persist them.
-      const safeScene =
-        scene.source === "local"
-          ? {
-              ...metadata,
-              id: "custom",
-              name: "Local scene",
-              sha256: undefined,
-            }
-          : metadata;
+      const safeScene = metadata;
       const result: BenchmarkResult = {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),

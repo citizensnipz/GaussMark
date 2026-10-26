@@ -40,7 +40,12 @@ test("explicit consent, D1 persistence, filters, validation, duplicate handling 
   await page
     .getByRole("button", { name: "Submit result", exact: true })
     .click();
-  await expect(page.getByRole("status")).toContainText("Submitted.");
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("status")
+      .filter({ hasText: "Submitted." }),
+  ).toContainText("Submitted.");
   expect(submissions).toBe(1);
   const after = await (
     await request.get(`${api}/api/results?source=reference`)

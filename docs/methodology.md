@@ -2,11 +2,11 @@
 
 ## Lifecycle
 
-1. Create a fresh renderer/device when the scene, API or render scale changes. The previous app, entity, asset, input listeners and observer are disposed. API changes also replace the canvas, because browser canvases cannot switch context families.
-2. Fetch the full asset into a Blob; load it through PlayCanvas's GSplat loader. Record request/read wall time, combined decoding/preparation wall time, and the next engine frame-end event after attachment.
+1. Create a fresh renderer/device when the scene, renderer, API, render scale or locked target changes. The previous app, entity, asset, input listeners and observer are disposed. API changes also replace the canvas, because browser canvases cannot switch context families.
+2. Fetch the full asset, then use PlayCanvas’s GSplat loader or the pinned WebSplatter PLY worker. Record request/read and combined decoding/preparation wall time. PlayCanvas load-to-frame ends at the next engine frame-end after attachment; WebSplatter waits for its first submitted render to finish. These loading boundaries and parsers differ; load metrics are descriptive, not equivalent cold-load benchmarks.
 3. Initialize Rust/WASM and verify its median against `[1,2,3,4] → 2.5` before enabling Run.
 4. Reset to the canonical scene origin and hold the starting camera for 2 seconds before each pass. Interactive pan/zoom never changes the measured path.
-5. Measure positive differences between successive `performance.now()` values at PlayCanvas `frameend`. The first callback establishes a baseline and contributes no sample. Camera transforms for the following frame are set after that callback.
+5. Measure positive differences between successive `performance.now()` values at PlayCanvas `frameend` or immediately after WebSplatter command submission. The first callback establishes a baseline and contributes no sample. Camera transforms for the following frame are set after that callback.
 6. Continue through the first callback at or after the selected measured duration. Each pass therefore includes the final interval crossing the target boundary. Do not remove spikes or slow frames.
 7. Repeat with the same starting camera and warm-up. UI progress updates at most four times a second; idle telemetry twice a second. No WASM work occurs per frame.
 8. Aggregate each pass and the pooled intervals in Rust. Save only completed runs. Tab hiding, resizing, manual stop and renderer-frame timeout invalidate/cancel the run without a saved result. Configuration and telemetry-size controls are locked while running.
@@ -19,7 +19,7 @@ For sorted intervals `x`, percentile `p` uses linear interpolation at `(n - 1) *
 
 Input must be finite, positive and nonempty. Rust returns an empty vector for invalid inputs, and TypeScript throws instead of creating fake statistics. Measured passes require at least ten samples.
 
-Pooled distributions retain unequal sample counts. Session comparisons require identical scene hash, renderer version, API, protocol, dimensions, scale and reported device information. Custom workloads are never considered matching references.
+Pooled distributions retain unequal sample counts. The previous-session reference delta requires identical scene hash, renderer version, API, protocol, dimensions, scale and reported device information. Explicit A/B comparisons intentionally allow different renderers and APIs, checking the same file hash, source/framing profile, protocol, dimensions, scale, object rotation, benchmark version and browser/OS/DPR instead. API differences are labelled and GPU identifiers are displayed for inspection. Different or unidentified workloads suppress percentage comparisons. Custom workloads are never considered matching references.
 
 ## Interpretation
 
@@ -40,3 +40,7 @@ Analytic reference cases: equator at longitude zero, north pole, and longitude 9
 The API accepts only benchmark `0.1.0` and methodology `frame-interval-v1`, with structural and cross-field checks. Reference metadata must match the bundled hash/count/bytes. Server receipt timestamps control activity and date filters. These checks cannot prove a client actually ran the workload; all records remain explicitly self-reported.
 
 No composite score, winner ranking, or mixed-configuration performance trend is calculated. Dashboard averages are descriptive, labelled as heterogeneous, and supported by inspectable records. The default view contains only standard reference scenes; custom data requires a separate selection.
+
+## Object orientation
+
+Rotation is recorded as XYZ Euler angles in degrees. Both adapters apply its inverse to the camera position, target and up vector about the same scene center. This is equivalent to rotating the Gaussian object, including the SH viewing direction, without re-uploading geometry. It affects the benchmark and must match across A/B runs. Inspection pan, zoom and fly position do not alter the automated path.
