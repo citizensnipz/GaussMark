@@ -21,13 +21,13 @@ export function CameraPathEditor({
   const [message, setMessage] = useState("");
   const centerHere = () => {
     if (!adapter) return;
-    const pose = adapter.captureCamera();
+    const center = adapter.objectPivot();
     onChange({
       mode: "orbit",
-      center: [pose.eye[0], pose.eye[1] - 1.6, pose.eye[2]],
-      radius: 1,
-      height: 1.6,
-      startAngle: 0,
+      center,
+      radius: path?.mode === "orbit" ? path.radius : 1,
+      height: path?.mode === "orbit" ? path.height : 1.6,
+      startAngle: path?.mode === "orbit" ? path.startAngle : 0,
     });
   };
   const update = (key: "radius" | "height" | "startAngle", value: number) => {
@@ -127,7 +127,7 @@ export function CameraPathEditor({
             </label>
           </div>
           <button className="button" disabled={disabled} onClick={centerHere}>
-            Center grid beneath camera
+            Center circle on object
           </button>
           <p>
             The camera travels above this circle, always facing inward. Orbit
@@ -166,7 +166,7 @@ export function CameraPathEditor({
           onClick={() => {
             try {
               localStorage.setItem(
-                `gaussmark.camera.${sceneKey}`,
+                `gaussmark.camera.centered.${sceneKey}`,
                 JSON.stringify({ path, rotation }),
               );
               setMessage(
@@ -185,7 +185,7 @@ export function CameraPathEditor({
           onClick={() => {
             try {
               const saved = JSON.parse(
-                localStorage.getItem(`gaussmark.camera.${sceneKey}`) || "null",
+                localStorage.getItem(`gaussmark.camera.centered.${sceneKey}`) || "null",
               );
               if (!saved) throw Error("No saved setup for this file.");
               if (

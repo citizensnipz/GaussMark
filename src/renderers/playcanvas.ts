@@ -148,7 +148,7 @@ export class PlayCanvasAdapter implements RendererAdapter {
           resource.aabb.halfExtents.length() * 2.2,
         );
       }
-      this.resetCamera();
+      this.controls!.normalizeOrigin();
       const prepared = performance.now();
       await new Promise<void>((resolve, reject) => {
         const done = () => {
@@ -220,6 +220,19 @@ export class PlayCanvasAdapter implements RendererAdapter {
       this.controls.rotation = rotation;
       this.controls.update();
     }
+  }
+  setGridVisible(visible: boolean) {
+    if (this.controls) {
+      this.controls.gridVisible = visible;
+      this.controls.gizmo.update();
+    }
+  }
+  centerObject() {
+    this.controls?.centerObject();
+  }
+  objectPivot(): [number, number, number] {
+    const p = this.controls?.origin;
+    return p ? [p.x, p.y, p.z] : [0, 0, 0];
   }
   setGizmoVisible(visible: boolean) {
     if (this.controls) {

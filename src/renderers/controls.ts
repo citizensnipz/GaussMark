@@ -6,6 +6,19 @@ export type NavigationMode = "orbit" | "fly";
 export type Rotation = [number, number, number];
 /** Shared camera/scene transform, so both renderers use the identical route. */
 export class SceneControls {
+  gridVisible = true;
+  gridOrigin = new Vec3();
+  private sourceOrigin = new Vec3();
+  normalizeOrigin() {
+    this.sourceOrigin.copy(this.origin);
+    this.origin.set(0, 0, 0);
+    this.gridOrigin.set(0, 0, 0);
+    this.reset();
+  }
+  centerObject() {
+    this.gridOrigin.copy(this.origin);
+    this.reset();
+  }
   origin = new Vec3(0, 0.1, 0);
   center = this.origin.clone();
   position = new Vec3();
@@ -207,10 +220,12 @@ export class SceneControls {
     const q = new Quat().setFromEulerAngles(...this.rotation).invert();
     const eye = q
       .transformVector(this.position.clone().sub(this.origin))
-      .add(this.origin);
+      .add(this.origin)
+      .add(this.sourceOrigin);
     const aim = q
       .transformVector(target.clone().sub(this.origin))
-      .add(this.origin);
+      .add(this.origin)
+      .add(this.sourceOrigin);
     this.viewTarget.copy(target);
     const direction = target.clone().sub(this.position).normalize();
     this.viewUp.copy(

@@ -16,7 +16,18 @@ test("local filenames, interior path, preset restore, frozen camera and A/B sett
     page.getByRole("heading", { name: "orbital-v1.ply", exact: true }),
   ).toBeVisible();
   await expect(run).toBeEnabled();
+  const grid = page.getByRole("button", { name: "Grid", exact: true });
+  await expect(grid).toHaveAttribute("aria-pressed", "true");
+  await grid.click();
+  await expect(grid).toHaveAttribute("aria-pressed", "false");
+  await grid.click();
+  await page.getByRole("button", { name: "Center the object", exact: true }).click();
   await page.getByLabel("Benchmark view").selectOption("orbit");
+  await page.getByLabel("Orbit radius", { exact: true }).fill("2");
+  await page.getByLabel("Orbit center X").fill("15");
+  await page.getByRole("button", { name: "Center circle on object" }).click();
+  await expect(page.getByLabel("Orbit center X")).toHaveValue("0");
+  await expect(page.getByLabel("Orbit radius", { exact: true })).toHaveValue("2");
   await page.getByLabel("Orbit center X").fill("0");
   await page.getByLabel("Orbit center Y").fill("-1");
   await page.getByLabel("Orbit center Z").fill("0");

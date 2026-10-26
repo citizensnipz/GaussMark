@@ -105,6 +105,7 @@ export function Workspace() {
     mounted = useRef(true),
     [generation, setGeneration] = useState(0);
   const [renderer, setRenderer] = useState("PlayCanvas");
+  const [gridVisible, setGridVisible] = useState(true);
   const [gizmoVisible, setGizmoVisible] = useState(true);
   const [cameraPath, setCameraPath] = useState<CameraPath>();
   const [rotation, setRotation] = useState<Rotation>([0, 0, 0]);
@@ -114,13 +115,19 @@ export function Workspace() {
     height: number;
   } | null>(null);
   const [comparisonMessage, setComparisonMessage] = useState("");
-  const controlsRef = useRef({ gizmoVisible, rotation, cameraPath });
-  controlsRef.current = { gizmoVisible, rotation, cameraPath };
+  const controlsRef = useRef({
+    gizmoVisible,
+    gridVisible,
+    rotation,
+    cameraPath,
+  });
+  controlsRef.current = { gizmoVisible, gridVisible, rotation, cameraPath };
   useEffect(() => {
+    adapter.current?.setGridVisible(gridVisible);
     adapter.current?.setGizmoVisible(gizmoVisible);
     adapter.current?.setObjectRotation(rotation);
     adapter.current?.setCameraPath(cameraPath);
-  }, [gizmoVisible, rotation, cameraPath]);
+  }, [gizmoVisible, gridVisible, rotation, cameraPath]);
   function useBaseline() {
     const baseline = readComparison().A;
     if (!baseline) {
@@ -222,6 +229,7 @@ export function Workspace() {
       setTelemetry({ ...idle, phase: "loading" });
       const loaded = await current.load(scene, controller.signal);
       if (controller.signal.aborted) return;
+      current.setGridVisible(controlsRef.current.gridVisible);
       current.setGizmoVisible(controlsRef.current.gizmoVisible);
       current.setObjectRotation(controlsRef.current.rotation);
       current.setCameraPath(controlsRef.current.cameraPath);
@@ -328,6 +336,7 @@ export function Workspace() {
           repeats,
           ...dimensions,
           renderScale: scale,
+          cameraCoordinates: "object-centered",
           objectRotation: rotation,
           ...(cameraPath ? { cameraPath } : {}),
         },
@@ -553,6 +562,21 @@ export function Workspace() {
                 </span>
               </div>
               <div className="viewport-actions">
+                <button
+                  className="glass-button controls-toggle"
+                  disabled={busy}
+                  aria-pressed={gridVisible}
+                  onClick={() => setGridVisible((v) => !v)}
+                >
+                  Grid
+                </button>
+                <button
+                  className="glass-button controls-toggle"
+                  disabled={busy}
+                  onClick={() => adapter.current?.centerObject()}
+                >
+                  Center the object
+                </button>
                 <button
                   className="glass-button controls-toggle"
                   aria-expanded={controlsOpen}

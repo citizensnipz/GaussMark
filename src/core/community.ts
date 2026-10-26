@@ -58,6 +58,7 @@ export const submissionSchema = z
         width: z.number().int().min(64).max(8192),
         height: z.number().int().min(64).max(8192),
         renderScale: z.number().min(0.25).max(2),
+        cameraCoordinates: z.literal("object-centered").optional(),
         cameraPath: z
           .discriminatedUnion("mode", [
             z

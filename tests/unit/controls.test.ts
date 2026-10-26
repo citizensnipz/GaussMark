@@ -119,3 +119,26 @@ describe("interior paths", () => {
     c.dispose();
   });
 });
+
+describe("object centering", () => {
+  it("rebases an offset scene while preserving its rendered camera position", () => {
+    const { c, last } = setup("PlayCanvas");
+    c.origin.set(100, 20, -50);
+    c.reset();
+    const before = last().eye.clone();
+    c.normalizeOrigin();
+    expect(c.origin.equals(Vec3.ZERO)).toBe(true);
+    expect(last().eye.distance(before)).toBeLessThan(0.00001);
+    c.centerObject();
+    expect(c.gridOrigin.equals(Vec3.ZERO)).toBe(true);
+    c.setCameraPath({
+      mode: "orbit",
+      center: [0, 0, 0],
+      radius: 2,
+      height: 1,
+      startAngle: 0,
+    });
+    c.benchmark(0, "orbit");
+    expect(last().eye.equals(new Vec3(100, 21, -48))).toBe(true);
+  });
+});

@@ -71,8 +71,9 @@ export function comparisonIssues(
   )
     issues.push("Different browser or device environment.");
   if (
+    a.config.cameraCoordinates !== b.config.cameraCoordinates ||
     JSON.stringify(a.config.cameraPath ?? null) !==
-    JSON.stringify(b.config.cameraPath ?? null)
+      JSON.stringify(b.config.cameraPath ?? null)
   )
     issues.push("Different camera paths or frozen poses.");
   if (a.id === b.id) issues.push("A and B are the same run.");

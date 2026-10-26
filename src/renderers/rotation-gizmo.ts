@@ -227,10 +227,14 @@ export class RotationGizmo {
   }
   private drawGuide() {
     const path = this.controls.cameraPath;
-    this.guide.style.display = path?.mode === "orbit" ? "block" : "none";
-    if (path?.mode !== "orbit") return;
-    const [x, y, z] = path.center,
-      r = path.radius;
+    this.guide.style.display =
+      this.controls.gridVisible || path?.mode === "orbit" ? "block" : "none";
+    const orbit = path?.mode === "orbit";
+    this.grid.style.display = this.controls.gridVisible ? "block" : "none";
+    this.circle.style.display = orbit ? "block" : "none";
+    const g = this.controls.gridOrigin;
+    const [x, y, z] = orbit ? path.center : [g.x, g.y, g.z],
+      r = orbit ? path.radius : this.controls.baseRadius / 2;
     const line = (a: Vec3, b: Vec3) => {
       const p = this.project(a),
         q = this.project(b);
@@ -254,7 +258,7 @@ export class RotationGizmo {
     this.grid.setAttribute("d", grid);
     this.circle.setAttribute("d", circle);
     const p = this.project(new Vec3(x, y, z));
-    this.pivot.style.display = p ? "block" : "none";
+    this.pivot.style.display = p && orbit ? "block" : "none";
     if (p) {
       this.pivot.setAttribute("cx", String(p[0]));
       this.pivot.setAttribute("cy", String(p[1]));
@@ -263,7 +267,9 @@ export class RotationGizmo {
   update() {
     const visible =
       this.controls.interactive &&
-      (this.enabled || this.controls.cameraPath?.mode === "orbit");
+      (this.enabled ||
+        this.controls.gridVisible ||
+        this.controls.cameraPath?.mode === "orbit");
     this.svg.style.display = visible ? "block" : "none";
     if (!visible) {
       this.active = null;
