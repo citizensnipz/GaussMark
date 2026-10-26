@@ -15,6 +15,7 @@ export class RotationGizmo {
     rotation: Quat;
     pointer: number;
   } | null = null;
+  mode: "rotate" | "translate" = "rotate";
   enabled = true;
   onChange?: (rotation: Rotation) => void;
   constructor(
@@ -33,6 +34,18 @@ export class RotationGizmo {
       path.setAttribute("aria-valuemin", "-180");
       path.setAttribute("aria-valuemax", "180");
       path.setAttribute("tabindex", "0");
+      let slide: {
+        x: number;
+        y: number;
+        start: Vec3;
+        dx: number;
+        dy: number;
+      } | null = null;
+      const translate = (v: Vec3) => {
+        this.controls.origin.copy(v);
+        this.controls.onTranslationChange?.([v.x, v.y, v.z]);
+        this.controls.update();
+      };
       path.addEventListener("keydown", (e) => {
         if (!this.enabled || !this.controls.interactive) return;
         if (
@@ -41,6 +54,19 @@ export class RotationGizmo {
           return;
         e.preventDefault();
         e.stopPropagation();
+        if (this.mode === "translate") {
+          translate(
+            this.controls.origin
+              .clone()
+              .add(
+                this.axis(axis).mulScalar(
+                  (e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : -1) *
+                    (e.shiftKey ? 1 : 0.1),
+                ),
+              ),
+          );
+          return;
+        }
         this.rotate(
           axis,
           (e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : -1) *
@@ -53,6 +79,20 @@ export class RotationGizmo {
           return;
         e.stopPropagation();
         e.preventDefault();
+        if (this.mode === "translate") {
+          const a = this.project(this.controls.origin),
+            b = this.project(this.controls.origin.clone().add(this.axis(axis)));
+          if (!a || !b) return;
+          slide = {
+            x: e.clientX,
+            y: e.clientY,
+            start: this.controls.origin.clone(),
+            dx: b[0] - a[0],
+            dy: b[1] - a[1],
+          };
+          path.setPointerCapture(e.pointerId);
+          return;
+        }
         const vector = this.hit(e, axis);
         if (!vector) return;
         this.active = {
@@ -65,6 +105,22 @@ export class RotationGizmo {
         path.setAttribute("stroke-width", "6");
       });
       path.addEventListener("pointermove", (e) => {
+        if (
+          slide &&
+          this.mode === "translate" &&
+          this.controls.interactive &&
+          this.enabled
+        ) {
+          const denominator = slide.dx ** 2 + slide.dy ** 2;
+          if (denominator < 1) return;
+          let delta =
+            ((e.clientX - slide.x) * slide.dx +
+              (e.clientY - slide.y) * slide.dy) /
+            denominator;
+          if (e.shiftKey) delta = Math.round(delta * 10) / 10;
+          translate(slide.start.clone().add(this.axis(axis).mulScalar(delta)));
+          return;
+        }
         const drag = this.active;
         if (!drag || drag.axis !== axis) return;
         e.stopPropagation();
@@ -78,6 +134,7 @@ export class RotationGizmo {
         this.rotate(axis, angle, drag.rotation);
       });
       const end = () => {
+        slide = null;
         this.active = null;
         path.setAttribute("stroke-width", "3");
       };
@@ -287,6 +344,33 @@ export class RotationGizmo {
     const radius = (depth * 2 * Math.tan((52 * Math.PI) / 360) * 85) / h;
     for (let axis = 0; axis < 3; axis++) {
       this.paths[axis].style.display = this.enabled ? "block" : "none";
+      this.paths[axis].setAttribute(
+        "aria-label",
+        `${this.mode === "rotate" ? "Rotate" : "Translate"} object ${"XYZ"[axis]}`,
+      );
+      if (this.mode === "translate") {
+        const a = this.project(this.controls.origin),
+          b = this.project(
+            this.controls.origin.clone().add(this.axis(axis).mulScalar(radius)),
+          );
+        let arrow = "";
+        if (a && b) {
+          const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+          arrow = `M${a[0]},${a[1]}L${b[0]},${b[1]} M${b[0] - 12 * Math.cos(angle - 0.5)},${b[1] - 12 * Math.sin(angle - 0.5)}L${b[0]},${b[1]}L${b[0] - 12 * Math.cos(angle + 0.5)},${b[1] - 12 * Math.sin(angle + 0.5)}`;
+        }
+        this.paths[axis].setAttribute("d", arrow);
+        this.paths[axis].setAttribute(
+          "aria-valuenow",
+          String(
+            [
+              this.controls.origin.x,
+              this.controls.origin.y,
+              this.controls.origin.z,
+            ][axis],
+          ),
+        );
+        continue;
+      }
       let d = "";
       for (let i = 0; i <= 96; i++) {
         const a = (i * Math.PI * 2) / 96,

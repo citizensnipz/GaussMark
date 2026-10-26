@@ -215,6 +215,21 @@ export class PlayCanvasAdapter implements RendererAdapter {
       this.controls.setMode(mode);
     }
   }
+  setObjectTranslation(value: Rotation) {
+    this.controls?.setTranslation(value);
+  }
+  setGizmoMode(mode: "rotate" | "translate") {
+    if (this.controls) {
+      this.controls.gizmo.mode = mode;
+      this.controls.gizmo.update();
+    }
+  }
+  onTranslationChange(callback: (value: Rotation) => void) {
+    if (this.controls) this.controls.onTranslationChange = callback;
+    return () => {
+      if (this.controls) this.controls.onTranslationChange = undefined;
+    };
+  }
   setObjectRotation(rotation: Rotation) {
     if (this.controls) {
       this.controls.rotation = rotation;

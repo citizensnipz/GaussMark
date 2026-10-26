@@ -10,6 +10,7 @@ import {
   Download,
   Expand,
   Eye,
+  EyeOff,
   Layers,
   LoaderCircle,
   Maximize,
@@ -108,6 +109,8 @@ export function Workspace() {
   const [gridVisible, setGridVisible] = useState(true);
   const [gizmoVisible, setGizmoVisible] = useState(true);
   const [cameraPath, setCameraPath] = useState<CameraPath>();
+  const [translation, setTranslation] = useState<Rotation>([0, 0, 0]);
+  const [gizmoMode, setGizmoMode] = useState<"rotate" | "translate">("rotate");
   const [rotation, setRotation] = useState<Rotation>([0, 0, 0]);
   const [controlsOpen, setControlsOpen] = useState(false);
   const [lockedTarget, setLockedTarget] = useState<{
@@ -119,15 +122,26 @@ export function Workspace() {
     gizmoVisible,
     gridVisible,
     rotation,
+    translation,
+    gizmoMode,
     cameraPath,
   });
-  controlsRef.current = { gizmoVisible, gridVisible, rotation, cameraPath };
+  controlsRef.current = {
+    gizmoVisible,
+    gridVisible,
+    rotation,
+    translation,
+    gizmoMode,
+    cameraPath,
+  };
   useEffect(() => {
     adapter.current?.setGridVisible(gridVisible);
     adapter.current?.setGizmoVisible(gizmoVisible);
+    adapter.current?.setObjectTranslation(translation);
+    adapter.current?.setGizmoMode(gizmoMode);
     adapter.current?.setObjectRotation(rotation);
     adapter.current?.setCameraPath(cameraPath);
-  }, [gizmoVisible, gridVisible, rotation, cameraPath]);
+  }, [gizmoVisible, gridVisible, rotation, translation, gizmoMode, cameraPath]);
   function useBaseline() {
     const baseline = readComparison().A;
     if (!baseline) {
@@ -139,6 +153,7 @@ export function Workspace() {
     setDuration(baseline.config.durationSeconds);
     setRepeats(baseline.config.repeats);
     setScale(baseline.config.renderScale);
+    setTranslation(baseline.config.objectTranslation ?? [0, 0, 0]);
     setRotation(baseline.config.objectRotation ?? [0, 0, 0]);
     setLockedTarget({
       width: baseline.config.width,
@@ -210,7 +225,12 @@ export function Workspace() {
         }) ?? (() => {});
       await current.initialize(canvas.current!);
       if (controller.signal.aborted) return;
-      offRotation = current.onRotationChange(setRotation);
+      const offMove = current.onTranslationChange(setTranslation);
+      const offTurn = current.onRotationChange(setRotation);
+      offRotation = () => {
+        offMove();
+        offTurn();
+      };
       offPath = current.onPathChange(setCameraPath);
       const resize = () => {
         const box = viewport.current?.getBoundingClientRect();
@@ -231,6 +251,8 @@ export function Workspace() {
       if (controller.signal.aborted) return;
       current.setGridVisible(controlsRef.current.gridVisible);
       current.setGizmoVisible(controlsRef.current.gizmoVisible);
+      current.setObjectTranslation(controlsRef.current.translation);
+      current.setGizmoMode(controlsRef.current.gizmoMode);
       current.setObjectRotation(controlsRef.current.rotation);
       current.setCameraPath(controlsRef.current.cameraPath);
       setLoading(loaded);
@@ -305,6 +327,7 @@ export function Workspace() {
     const sha256 = Array.from(new Uint8Array(digest), (n) =>
       n.toString(16).padStart(2, "0"),
     ).join("");
+    setTranslation([0, 0, 0]);
     setRotation([0, 0, 0]);
     setCameraPath(undefined);
     setScene({
@@ -337,6 +360,7 @@ export function Workspace() {
           ...dimensions,
           renderScale: scale,
           cameraCoordinates: "object-centered",
+          objectTranslation: translation,
           objectRotation: rotation,
           ...(cameraPath ? { cameraPath } : {}),
         },
@@ -610,22 +634,35 @@ export function Workspace() {
             </div>
             <div className="gizmo-toolbar" aria-label="Viewport tools">
               <button
-                className="glass-button controls-toggle"
+                className="glass-button"
                 disabled={busy}
-                aria-pressed={gizmoVisible}
-                onClick={() => setGizmoVisible((v) => !v)}
+                title="Rotate object"
+                aria-label="Rotate object"
+                aria-pressed={gizmoMode === "rotate"}
+                onClick={() => setGizmoMode("rotate")}
               >
-                Rotate object
+                <Orbit size={18} />
               </button>
               <button
-                className="glass-button controls-toggle"
+                className="glass-button"
                 disabled={busy}
-                onClick={() => {
-                  setRotation([0, 0, 0]);
-                  adapter.current?.resetCamera();
-                }}
+                title="Translate object"
+                aria-label="Translate object"
+                aria-pressed={gizmoMode === "translate"}
+                onClick={() => setGizmoMode("translate")}
               >
-                Reset view
+                <Move3D size={18} />
+              </button>
+              <button
+                className="glass-button"
+                role="switch"
+                disabled={busy}
+                title={gizmoVisible ? "Hide gizmo" : "Show gizmo"}
+                aria-label="Gizmo visibility"
+                aria-checked={gizmoVisible}
+                onClick={() => setGizmoVisible((v) => !v)}
+              >
+                {gizmoVisible ? <Eye size={18} /> : <EyeOff size={18} />}
               </button>
             </div>
             {controlsOpen && (
@@ -834,6 +871,8 @@ export function Workspace() {
                 adapter={adapter.current}
                 disabled={busy || !loading}
                 sceneKey={scene.sha256}
+                translation={translation}
+                onTranslation={setTranslation}
                 rotation={rotation}
                 onRotation={setRotation}
               />

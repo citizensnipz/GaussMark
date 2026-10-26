@@ -80,6 +80,13 @@ export const submissionSchema = z
               .strict(),
           ])
           .optional(),
+        objectTranslation: z
+          .tuple([
+            z.number().finite(),
+            z.number().finite(),
+            z.number().finite(),
+          ])
+          .optional(),
         objectRotation: z
           .tuple([
             finite.min(-180).max(180),

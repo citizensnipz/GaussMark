@@ -2548,6 +2548,12 @@ dialog::backdrop {
   font-size: 30px;
   margin: 6px 0;
 }
+.comparison-panel td.comparison-better { color: #8cdda5; }
+.comparison-panel td.comparison-worse { color: #ff9292; }
+.comparison-panel td.comparison-similar { color: #f2d48a; }
+[data-theme="light"] .comparison-panel td.comparison-better { color: #216d3b; }
+[data-theme="light"] .comparison-panel td.comparison-worse { color: #b63131; }
+[data-theme="light"] .comparison-panel td.comparison-similar { color: #86620c; }
 .comparison-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2707,3 +2713,5 @@ dialog::backdrop {
 .camera-path-editor .actions {
   flex-wrap: wrap;
 }
+
+.gizmo-toolbar { left: auto; right: 16px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; }

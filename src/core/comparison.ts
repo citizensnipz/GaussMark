@@ -60,8 +60,10 @@ export function comparisonIssues(
     if (a.config[key] !== b.config[key])
       issues.push(`Different ${key.replace(/([A-Z])/g, " $1").toLowerCase()}.`);
   if (
+    JSON.stringify(a.config.objectTranslation ?? [0, 0, 0]) !==
+      JSON.stringify(b.config.objectTranslation ?? [0, 0, 0]) ||
     JSON.stringify(a.config.objectRotation ?? [0, 0, 0]) !==
-    JSON.stringify(b.config.objectRotation ?? [0, 0, 0])
+      JSON.stringify(b.config.objectRotation ?? [0, 0, 0])
   )
     issues.push("Different object rotation.");
   if (

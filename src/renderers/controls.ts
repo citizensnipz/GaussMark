@@ -9,13 +9,22 @@ export class SceneControls {
   gridVisible = true;
   gridOrigin = new Vec3();
   private sourceOrigin = new Vec3();
+  private normalized = false;
   normalizeOrigin() {
     this.sourceOrigin.copy(this.origin);
+    this.normalized = true;
     this.origin.set(0, 0, 0);
     this.gridOrigin.set(0, 0, 0);
     this.reset();
   }
+  onTranslationChange?: (value: Rotation) => void;
+  setTranslation(value: Rotation) {
+    this.origin.set(...value);
+    this.update();
+  }
   centerObject() {
+    this.origin.set(0, 0, 0);
+    this.onTranslationChange?.([0, 0, 0]);
     this.gridOrigin.copy(this.origin);
     this.reset();
   }
@@ -220,12 +229,10 @@ export class SceneControls {
     const q = new Quat().setFromEulerAngles(...this.rotation).invert();
     const eye = q
       .transformVector(this.position.clone().sub(this.origin))
-      .add(this.origin)
-      .add(this.sourceOrigin);
+      .add(this.normalized ? this.sourceOrigin : this.origin);
     const aim = q
       .transformVector(target.clone().sub(this.origin))
-      .add(this.origin)
-      .add(this.sourceOrigin);
+      .add(this.normalized ? this.sourceOrigin : this.origin);
     this.viewTarget.copy(target);
     const direction = target.clone().sub(this.position).normalize();
     this.viewUp.copy(

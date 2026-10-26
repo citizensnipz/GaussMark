@@ -66,6 +66,7 @@ export type RunConfig = {
   renderScale: number;
   cameraCoordinates?: "object-centered";
   cameraPath?: CameraPath;
+  objectTranslation?: [number, number, number];
   objectRotation?: [number, number, number];
 };
 export type DeviceInfo = {
@@ -126,6 +127,11 @@ export interface RendererAdapter {
   onPathChange(callback: (path: CameraPath) => void): () => void;
   setInteractive(enabled: boolean): void;
   setNavigation(mode: "orbit" | "fly", speed: number): void;
+  setObjectTranslation(value: [number, number, number]): void;
+  setGizmoMode(mode: "rotate" | "translate"): void;
+  onTranslationChange(
+    callback: (value: [number, number, number]) => void,
+  ): () => void;
   setObjectRotation(rotation: [number, number, number]): void;
   setGridVisible(visible: boolean): void;
   centerObject(): void;

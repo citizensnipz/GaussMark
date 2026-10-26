@@ -1,0 +1,24 @@
+import { test, expect } from '@playwright/test';
+test('translation tools and visibility', async ({ page }) => {
+  await page.goto('/benchmark/');
+  await expect(page.getByRole('button', { name: 'Run benchmark', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Translate object', exact: true }).click();
+  const axis = page.getByRole('slider', { name: 'Translate object X', exact: true });
+  await expect(axis).toBeVisible();
+  await axis.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(axis).toHaveAttribute('aria-valuenow', '0.1');
+  const box = (await axis.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 3, box.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width + 25, box.y + 2, { steps: 5 });
+  await page.mouse.up();
+  await page.getByRole('switch', { name: 'Gizmo visibility' }).click();
+  await expect(axis).toBeHidden();
+  await page.getByRole('switch', { name: 'Gizmo visibility' }).click();
+  await expect(axis).toBeVisible();
+  await page.getByRole('button', { name: 'Center the object', exact: true }).click();
+  await expect(axis).toHaveAttribute('aria-valuenow', '0');
+  await page.getByRole('button', { name: 'Rotate object', exact: true }).click();
+  await expect(page.getByRole('slider', { name: 'Rotate object X', exact: true })).toBeVisible();
+});

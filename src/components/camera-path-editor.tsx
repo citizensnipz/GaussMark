@@ -9,12 +9,16 @@ export function CameraPathEditor({
   sceneKey,
   rotation,
   onRotation,
+  translation,
+  onTranslation,
 }: {
   path: CameraPath | undefined;
   onChange: (p: CameraPath | undefined) => void;
   adapter: RendererAdapter | null;
   disabled: boolean;
   sceneKey?: string;
+  translation: [number, number, number];
+  onTranslation: (v: [number, number, number]) => void;
   rotation: [number, number, number];
   onRotation: (r: [number, number, number]) => void;
 }) {
@@ -167,10 +171,10 @@ export function CameraPathEditor({
             try {
               localStorage.setItem(
                 `gaussmark.camera.centered.${sceneKey}`,
-                JSON.stringify({ path, rotation }),
+                JSON.stringify({ path, rotation, translation }),
               );
               setMessage(
-                "Camera setup and object rotation saved for this file.",
+                "Camera setup and object transform saved for this file.",
               );
             } catch {
               setMessage("Could not save: browser storage unavailable.");
@@ -185,7 +189,8 @@ export function CameraPathEditor({
           onClick={() => {
             try {
               const saved = JSON.parse(
-                localStorage.getItem(`gaussmark.camera.centered.${sceneKey}`) || "null",
+                localStorage.getItem(`gaussmark.camera.centered.${sceneKey}`) ||
+                  "null",
               );
               if (!saved) throw Error("No saved setup for this file.");
               if (
@@ -213,6 +218,9 @@ export function CameraPathEditor({
                 )
               )
                 throw Error("Invalid saved camera.");
+              if (saved.translation && !vec(saved.translation))
+                throw Error("Invalid saved translation.");
+              onTranslation(saved.translation ?? [0, 0, 0]);
               onRotation(saved.rotation);
               onChange(p);
               setMessage("Saved setup restored. Preview it before running.");

@@ -55,6 +55,7 @@ export class BenchmarkRunner {
     await loadWasm();
     if (document.visibilityState === "hidden")
       throw new Error("Keep this tab visible during measurement.");
+    adapter.setObjectTranslation(config.objectTranslation ?? [0, 0, 0]);
     adapter.setCameraPath(config.cameraPath);
     adapter.setInteractive(false);
     const frames: number[][] = [];

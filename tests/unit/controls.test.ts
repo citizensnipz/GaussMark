@@ -142,3 +142,21 @@ describe("object centering", () => {
     expect(last().eye.equals(new Vec3(100, 21, -48))).toBe(true);
   });
 });
+
+it("translates the object relative to a fixed camera and recenters it", () => {
+  const { c, last } = setup("PlayCanvas");
+  c.normalizeOrigin();
+  c.setCameraPath({
+    mode: "frozen",
+    eye: [0, 2, 5],
+    target: [0, 0, 0],
+    up: [0, 1, 0],
+  });
+  c.benchmark(0, "stationary");
+  const before = last().eye.clone();
+  c.setTranslation([3, 1, -2]);
+  c.benchmark(0, "stationary");
+  expect(last().eye.equals(before.sub(new Vec3(3, 1, -2)))).toBe(true);
+  c.centerObject();
+  expect(c.origin.equals(Vec3.ZERO)).toBe(true);
+});

@@ -164,13 +164,46 @@ export function Comparison() {
                   const av = get(a),
                     bv = get(b),
                     change = (bv / av - 1) * 100;
+                  const comparable =
+                    !issues.length &&
+                    label !== "Samples" &&
+                    Number.isFinite(av) &&
+                    Number.isFinite(bv);
+                  const close =
+                    Math.abs(av - bv) <=
+                    Math.max(Math.abs(av), Math.abs(bv)) * 0.01;
+                  const aBetter = higher ? av > bv : av < bv;
+                  const aStatus = !comparable
+                    ? undefined
+                    : close
+                      ? "similar"
+                      : aBetter
+                        ? "better"
+                        : "worse";
+                  const bStatus = !comparable
+                    ? undefined
+                    : close
+                      ? "similar"
+                      : aBetter
+                        ? "worse"
+                        : "better";
                   return (
                     <tr key={label}>
                       <th>{label}</th>
-                      <td>
+                      <td
+                        className={
+                          aStatus ? `comparison-${aStatus}` : undefined
+                        }
+                        title={aStatus === "similar" ? "Within 1%" : aStatus}
+                      >
                         {av.toFixed(2)} {unit}
                       </td>
-                      <td>
+                      <td
+                        className={
+                          bStatus ? `comparison-${bStatus}` : undefined
+                        }
+                        title={bStatus === "similar" ? "Within 1%" : bStatus}
+                      >
                         {bv.toFixed(2)} {unit}
                       </td>
                       <td>
@@ -187,9 +220,10 @@ export function Comparison() {
             </table>
           </div>
           <p className="muted">
-            Frame intervals include display pacing and browser scheduling. Load
-            times include different parsers and cache conditions; they are not
-            controlled cold-load comparisons.
+            Green: better · Red: worse · Amber: within 1%. Sample counts and
+            mismatched tests are unranked. Frame intervals include display
+            pacing and browser scheduling. Load times include different parsers
+            and cache conditions; they are not controlled cold-load comparisons.
           </p>
         </>
       )}
