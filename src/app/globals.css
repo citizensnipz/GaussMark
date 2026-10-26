@@ -47,7 +47,7 @@ body {
   color: var(--text);
 }
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-questrial), Arial, sans-serif;
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
 }
@@ -140,6 +140,10 @@ canvas:focus-visible {
   border-bottom: 1px solid var(--border);
   gap: 42px;
   background: var(--surface);
+}
+.brand-wordmark {
+  font-family: var(--font-gruppo), sans-serif;
+  font-weight: 400;
 }
 .brand {
   display: flex;

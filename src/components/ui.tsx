@@ -46,7 +46,8 @@ export function Header({
         <span className="brand-mark">
           <Orbit size={24} />
         </span>
-        GaussMark<span className="alpha">ALPHA</span>
+        <span className="brand-wordmark">GaussMark</span>
+        <span className="alpha">ALPHA</span>
       </Link>
       <nav aria-label="Main navigation">
         {[

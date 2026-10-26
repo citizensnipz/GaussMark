@@ -1,5 +1,18 @@
 import type { Metadata } from "next";
+import { Questrial, Gruppo } from "next/font/google";
 import "./globals.css";
+const questrial = Questrial({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-questrial",
+});
+const gruppo = Gruppo({
+  weight: "400",
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-gruppo",
+});
 export const metadata: Metadata = {
   title: "GaussMark — Graphics observatory",
   description:
@@ -11,7 +24,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${questrial.variable} ${gruppo.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{
