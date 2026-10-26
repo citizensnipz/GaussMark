@@ -8,9 +8,17 @@ import {
   Sun,
   X,
   Play,
-  Orbit,
+  createLucideIcon,
   Activity,
 } from "lucide-react";
+// Lucide GPU icon, ISC license: https://github.com/lucide-icons/lucide/blob/main/icons/gpu.svg
+const Gpu = createLucideIcon("Gpu", [
+  ["path", { d: "M2 17h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H2", key: "board" }],
+  ["path", { d: "M2 21V3", key: "bracket" }],
+  ["path", { d: "M7 17v3a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-3", key: "connector" }],
+  ["circle", { cx: "16", cy: "11", r: "2", key: "fan-right" }],
+  ["circle", { cx: "8", cy: "11", r: "2", key: "fan-left" }],
+]);
 export function ThemeToggle() {
   const [theme, setTheme] = useState("dark");
   useEffect(
@@ -44,7 +52,7 @@ export function Header({
     <header className="app-header">
       <Link href="/" className="brand">
         <span className="brand-mark">
-          <Orbit size={24} />
+          <Gpu size={24} />
         </span>
         <span className="brand-wordmark">GaussMark</span>
         <span className="alpha">ALPHA</span>

@@ -2715,3 +2715,29 @@ dialog::backdrop {
 }
 
 .gizmo-toolbar { left: auto; right: 16px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; }
+/* Dark menus with high-contrast selection, including in the light shell. */
+select option {
+  background: #262626;
+  color: #e8e8e5;
+}
+select option:checked,
+select option:not(:disabled):hover,
+select option:not(:disabled):focus-visible {
+  background: #b8d8a0;
+  color: #182415;
+}
+select option:disabled { color: #a0a29e; }
+@supports (appearance: base-select) {
+  select, select::picker(select) { appearance: base-select; }
+  select::picker(select) {
+    background: #262626;
+    color: #e8e8e5;
+    border: 1px solid #51554d;
+    border-radius: 6px;
+    padding: 4px;
+    box-shadow: 0 8px 28px #0006;
+    color-scheme: dark;
+  }
+  select option { padding: 8px 12px; border-radius: 3px; }
+  select option:focus-visible { outline: 2px solid #e8e8e5; outline-offset: -2px; }
+}
