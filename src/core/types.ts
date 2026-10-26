@@ -26,7 +26,7 @@ export type Scene = {
   version: string;
   name: string;
   url: string;
-  format: "ply" | "sog";
+  format: import("./practical-types").GaussianFormat;
   source: "reference" | "local";
   bytes?: number;
   sha256?: string;
@@ -117,7 +117,15 @@ export interface RendererAdapter {
   readonly version: string;
   readonly api: GraphicsApi;
   initialize(canvas: HTMLCanvasElement): Promise<void>;
-  load(scene: Scene, signal: AbortSignal): Promise<LoadMetrics>;
+  load(
+    scene: Scene,
+    signal: AbortSignal,
+    context?: import("./practical-types").LoadContext,
+  ): Promise<LoadMetrics>;
+  capabilities(): import("./practical-types").Capabilities;
+  unload(): void | Promise<void>;
+  setInstrumentation?(enabled: boolean): void;
+  gpuSamples?(): Promise<import("./practical-types").GpuSample[]>;
   resize(width: number, height: number): void;
   setCamera(progress: number, mode: MotionMode): void;
   resetCamera(): void;

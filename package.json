@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit && tsc -p worker/tsconfig.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "check:public": "node scripts/check-public-artifacts.mjs",
     "test:rust": "cargo test --manifest-path crates/gaussmark-core/Cargo.toml",
     "build:wasm": "wasm-pack build crates/gaussmark-core --target web --out-dir ../../public/wasm --release --no-pack && node scripts/finalize-wasm.mjs",
     "scene": "node scripts/generate-scene.mjs",

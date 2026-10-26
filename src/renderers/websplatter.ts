@@ -10,6 +10,13 @@ import type {
   MotionMode,
 } from "@/core/types";
 import { heapBytes } from "./playcanvas";
+import {
+  rendererCapabilities,
+  type LoadContext,
+  type GpuSample,
+} from "@/core/practical-types";
+import { validateAttributes } from "@/core/provider";
+import type { AllocationLedger } from "@/core/measurements";
 type Parsed = {
   num_points: number;
   final_sh_degree: number;
@@ -23,6 +30,7 @@ type Parsed = {
 type Renderer = {
   frame(encoder: GPUCommandEncoder, view: GPUTextureView): void;
   render_settings_buffer: GPUBuffer;
+  readBreakdown(): Promise<Record<string, number[]>>;
 };
 type Runtime = {
   GaussianRenderer: new (
@@ -64,6 +72,46 @@ export class WebSplatterAdapter implements RendererAdapter {
   private eye = new Vec3();
   private target = new Vec3();
   private up = new Vec3(0, 1, 0);
+  private timing = false;
+  private resources = new Set<GPUBuffer | GPUQuerySet>();
+  private sceneListeners: {
+    type: string;
+    listener: EventListenerOrEventListenerObject;
+  }[] = [];
+  private cpuBuffers: ArrayBuffer[] = [];
+  private ledger?: AllocationLedger;
+  capabilities() {
+    const c = rendererCapabilities("WebSplatter", "webgpu");
+    c.gpuTimestamps = {
+      supported: !!this.device?.features.has("timestamp-query"),
+      reason:
+        "WebGPU timestamp-query feature, deferred readback of up to 200 final frames",
+    };
+    return c;
+  }
+  setInstrumentation(enabled: boolean) {
+    this.timing = enabled;
+  }
+  async gpuSamples(): Promise<GpuSample[]> {
+    if (
+      !this.timing ||
+      !this.capabilities().gpuTimestamps.supported ||
+      !this.renderer
+    )
+      return [];
+    // End the observation window before readback; no frame counter can race mapping.
+    cancelAnimationFrame(this.animation);
+    const values = await this.renderer.readBreakdown();
+    return Object.entries(values).flatMap(([stage, values]) =>
+      values
+        .filter((v) => Number.isFinite(v) && v >= 0)
+        .map((durationMs) => ({
+          stage,
+          durationMs,
+          method: "webgpu-timestamp" as const,
+        })),
+    );
+  }
   async initialize(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     if (!navigator.gpu)
@@ -75,6 +123,9 @@ export class WebSplatterAdapter implements RendererAdapter {
     });
     if (!adapter) throw Error("No WebGPU adapter available.");
     const device = await adapter.requestDevice({
+      requiredFeatures: adapter.features.has("timestamp-query")
+        ? ["timestamp-query"]
+        : [],
       requiredLimits: {
         maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
         maxBufferSize: adapter.limits.maxBufferSize,
@@ -182,156 +233,350 @@ export class WebSplatterAdapter implements RendererAdapter {
     );
     device.queue.writeBuffer(this.cameraBuffer!, 0, data);
   }
-  async load(scene: Scene, signal: AbortSignal): Promise<LoadMetrics> {
-    if (scene.format !== "ply")
-      throw Error(
-        "WebSplatter currently accepts uncompressed Gaussian PLY. SOG is supported by PlayCanvas only; use the same PLY for A/B testing.",
-      );
-    const start = performance.now(),
-      heapBefore = heapBytes(),
-      response = await fetch(scene.url, { signal });
-    if (!response.ok) throw Error(`Scene request failed (${response.status}).`);
-    const buffer = await response.arrayBuffer(),
-      bytes = buffer.byteLength,
-      readEnd = performance.now();
+  async load(
+    scene: Scene,
+    signal: AbortSignal,
+    context?: LoadContext,
+  ): Promise<LoadMetrics> {
     signal.throwIfAborted();
-    const header = new TextDecoder().decode(buffer.slice(0, 8192));
-    if (!/^format binary_little_endian 1\.0\r?$/m.test(header))
-      throw Error("WebSplatter requires a binary little-endian Gaussian PLY.");
-    const parsed = await new Promise<Parsed>((resolve, reject) => {
-      const worker = new Worker("/vendor/websplatter-ply-worker.js", {
-        type: "module",
+    this.unload();
+    if (this.cameraBuffer) this.ledger?.release(this.cameraBuffer);
+    this.ledger = context?.allocations;
+    if (this.cameraBuffer)
+      this.ledger?.track(this.cameraBuffer, this.cameraBuffer.size, "gpu");
+    try {
+      if (scene.format !== "ply" && !context?.provider)
+        throw Error(
+          scene.format === "sog"
+            ? "SOG is supported by PlayCanvas only in native mode. WebSplatter requires an external read-only provider for converted SOG rendering."
+            : "Requires external read-only provider. Native WebSplatter accepts uncompressed Gaussian PLY only; SSOG is unverified.",
+        );
+      const start = performance.now(),
+        heapBefore = heapBytes();
+      let parsed: Parsed,
+        bytes = 0,
+        readEnd = start;
+      if (context?.provider) {
+        if (!context.provider.formats.includes(scene.format))
+          throw Error("Selected provider does not declare this format");
+        context.onStage?.("decode");
+        const decodeEnd = context.timeline.begin(
+          "external decode",
+          context.provider.synthetic ? "elapsed" : "worker-elapsed",
+        );
+        let attributes;
+        try {
+          attributes = validateAttributes(
+            await context.provider.decode(
+              context.source,
+              scene.format,
+              signal,
+              context.allocations,
+            ),
+          );
+        } finally {
+          decodeEnd();
+        }
+        signal.throwIfAborted();
+        context.metadata = attributes.metadata;
+        const conversionEnd = context.timeline.begin(
+          "decoded attributes to WebSplatter f32",
+          "synchronous",
+        );
+        const { metadata: m, positions, opacity, covariance, sh } = attributes;
+        for (const v of [positions, opacity, covariance, sh])
+          context.allocations.buffer(v);
+        const gaussian = new Float32Array(m.splats * 10);
+        for (let i = 0; i < m.splats; i++) {
+          gaussian.set(positions.subarray(i * 3, i * 3 + 3), i * 10);
+          gaussian[i * 10 + 3] = opacity[i];
+          gaussian.set(covariance.subarray(i * 6, i * 6 + 6), i * 10 + 4);
+        }
+        parsed = {
+          num_points: m.splats,
+          final_sh_degree: m.shDegree,
+          gaussian_cpu: gaussian.buffer,
+          sh_cpu: sh.buffer,
+          gs_stride: 10,
+          sh_stride: 3 * (m.shDegree + 1) ** 2,
+          boundsMin: m.bounds.slice(0, 3),
+          boundsMax: m.bounds.slice(3),
+        };
+        context.allocations.buffer(gaussian);
+        for (const v of [positions, opacity, covariance])
+          context.allocations.release(v.buffer);
+        conversionEnd();
+        context.path = {
+          format: scene.format,
+          decoder: context.provider.synthetic
+            ? "Public synthetic provider"
+            : "External read-only provider",
+          providerVersion: context.provider.version,
+          conversion:
+            "Decoded position/opacity/covariance/SH to public WebSplatter f32 layout; SH degree preserved",
+          representation: "WebSplatter f32 GPU storage buffers",
+          native: false,
+        };
+        bytes = context.source.stats.deliveredBytes;
+        readEnd = performance.now();
+      } else {
+        context?.onStage?.("delivery");
+        const deliveryEnd = context?.timeline.begin("byte delivery");
+        let buffer: ArrayBuffer;
+        if (context)
+          buffer = (
+            await context.source.readRange(0, context.source.size, signal)
+          ).buffer;
+        else {
+          const response = await fetch(scene.url, { signal });
+          if (!response.ok)
+            throw Error(`Scene request failed (${response.status}).`);
+          buffer = await response.arrayBuffer();
+        }
+        bytes = buffer.byteLength;
+        readEnd = performance.now();
+        deliveryEnd?.();
+        signal.throwIfAborted();
+        const header = new TextDecoder().decode(buffer.slice(0, 8192));
+        if (!/^format binary_little_endian 1\.0\r?$/m.test(header))
+          throw Error(
+            "WebSplatter requires a binary little-endian Gaussian PLY.",
+          );
+        context?.onStage?.("decode");
+        signal.throwIfAborted();
+        const decodeEnd = context?.timeline.begin(
+          "PLY worker parse and conversion",
+          "worker-elapsed",
+        );
+        context?.allocations.buffer(buffer, "worker");
+        try {
+          parsed = await new Promise<Parsed>((resolve, reject) => {
+            const worker = new Worker("/vendor/websplatter-ply-worker.js", {
+              type: "module",
+            });
+            const clean = () => {
+              worker.terminate();
+              signal.removeEventListener("abort", abort);
+            };
+            const abort = () => {
+              clean();
+              reject(new DOMException("Cancelled", "AbortError"));
+            };
+            signal.addEventListener("abort", abort, { once: true });
+            worker.onerror = (e) => {
+              clean();
+              reject(Error(e.message));
+            };
+            worker.onmessage = (e) => {
+              if (e.data.type === "done") {
+                clean();
+                resolve(e.data);
+              } else if (e.data.type === "error") {
+                clean();
+                reject(Error(e.data.message));
+              }
+            };
+            worker.postMessage(
+              {
+                type: "start",
+                plyBuffer: buffer,
+                sh_degree: 3,
+                sort: null,
+                memoryPrecision: "f32",
+              },
+              [buffer],
+            );
+          });
+        } finally {
+          decodeEnd?.();
+          context?.allocations.release(buffer);
+        }
+        if (context)
+          context.path = {
+            format: scene.format,
+            decoder: "Public WebSplatter PLY worker",
+            conversion: "PLY to covariance + SH f32 in worker (inseparable)",
+            representation: "WebSplatter f32 GPU storage buffers",
+            native: true,
+          };
+      }
+      signal.throwIfAborted();
+      if (this.destroyed) throw Error("Renderer cancelled.");
+      if (!parsed.num_points) throw Error("The PLY contains no Gaussians.");
+      const device = this.device!;
+      this.cpuBuffers = [parsed.gaussian_cpu, parsed.sh_cpu];
+      for (const b of this.cpuBuffers) context?.allocations.buffer(b);
+      if (context)
+        context.metadata ??= {
+          splats: parsed.num_points,
+          shDegree: parsed.final_sh_degree,
+          bounds: [...parsed.boundsMin, ...parsed.boundsMax] as [
+            number,
+            number,
+            number,
+            number,
+            number,
+            number,
+          ],
+          precision: "f32",
+          verifiedBy: "decoder",
+        };
+      context?.onStage?.("gpu-preparation");
+      signal.throwIfAborted();
+      const prepareEnd = context?.timeline.begin(
+        "GPU resource construction and upload submission",
+        "synchronous",
+      );
+      const trackBuffer = (descriptor: GPUBufferDescriptor) => {
+        const b = device.createBuffer(descriptor);
+        this.resources.add(b);
+        this.ledger?.track(b, b.size, "gpu");
+        return b;
+      };
+      const scopedDevice = new Proxy(device, {
+        get: (target, key) => {
+          if (key === "createBuffer") return trackBuffer;
+          if (key === "createQuerySet")
+            return (descriptor: GPUQuerySetDescriptor) => {
+              const q = device.createQuerySet(descriptor);
+              this.resources.add(q);
+              return q;
+            };
+          if (key === "addEventListener")
+            return (
+              type: string,
+              listener: EventListenerOrEventListenerObject,
+            ) => {
+              this.sceneListeners.push({ type, listener });
+              device.addEventListener(type, listener);
+            };
+          const v = Reflect.get(target, key, target);
+          return typeof v === "function" ? v.bind(target) : v;
+        },
       });
-      const clean = () => {
-        worker.terminate();
-        signal.removeEventListener("abort", abort);
+      const upload = (data: ArrayBuffer) => {
+        if (data.byteLength > device.limits.maxStorageBufferBindingSize)
+          throw Error("Scene exceeds this GPU’s storage buffer limit.");
+        const b = trackBuffer({
+          size: data.byteLength,
+          usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        device.queue.writeBuffer(b, 0, data);
+        return b;
       };
-      const abort = () => {
-        clean();
-        reject(new DOMException("Cancelled", "AbortError"));
-      };
-      signal.addEventListener("abort", abort, { once: true });
-      worker.onerror = (e) => {
-        clean();
-        reject(Error(e.message));
-      };
-      worker.onmessage = (e) => {
-        if (e.data.type === "done") {
-          clean();
-          resolve(e.data);
-        } else if (e.data.type === "error") {
-          clean();
-          reject(Error(e.data.message));
+      device.pushErrorScope("validation");
+      this.renderer = new this.runtime!.GaussianRenderer(
+        {
+          ...parsed,
+          sh_degree: parsed.final_sh_degree,
+          ply_precision: "f32",
+          gaussian_cpu: new Float32Array(parsed.gaussian_cpu),
+          sh_cpu: new Float32Array(parsed.sh_cpu),
+          gaussian_3d_buffer: upload(parsed.gaussian_cpu),
+          sh_buffer: upload(parsed.sh_cpu),
+        },
+        scopedDevice,
+        this.format,
+        this.cameraBuffer!,
+        this.timing && device.features.has("timestamp-query")
+          ? ["timestamp-query"]
+          : [],
+        false,
+        false,
+        false,
+      );
+      this.runtime!.setCanvasSize(
+        this.canvas!.width,
+        this.canvas!.height,
+        device,
+        this.renderer.render_settings_buffer,
+      );
+      prepareEnd?.();
+      context?.timeline.mark(
+        "gpu-upload-submitted",
+        "queue.writeBuffer calls returned; not GPU completion",
+      );
+      const error = await device.popErrorScope();
+      if (error) throw Error(error.message);
+      if (scene.source === "local") {
+        const min = parsed.boundsMin,
+          max = parsed.boundsMax;
+        if (!min.every(Number.isFinite) || !max.every(Number.isFinite))
+          throw Error("Scene has invalid bounds.");
+        this.controls!.origin.set(
+          (min[0] + max[0]) / 2,
+          (min[1] + max[1]) / 2,
+          (min[2] + max[2]) / 2,
+        );
+        this.controls!.baseRadius = Math.max(
+          0.1,
+          Math.hypot(
+            (max[0] - min[0]) / 2,
+            (max[1] - min[1]) / 2,
+            (max[2] - min[2]) / 2,
+          ) * 2.2,
+        );
+      }
+      this.controls!.normalizeOrigin();
+      context?.configureScene?.();
+      const prepared = performance.now();
+      context?.timeline.mark(
+        "renderer-prepared",
+        "GPU resource/pipeline construction returned",
+      );
+      signal.throwIfAborted();
+      if (this.destroyed) throw Error("Renderer cancelled.");
+      const render = (now: number) => {
+        if (this.destroyed || this.fault) return;
+        try {
+          this.controls!.tick(this.previous ? (now - this.previous) / 1000 : 0);
+          this.previous = now;
+          this.writeCamera();
+          const encoder = device.createCommandEncoder();
+          this.renderer!.frame(
+            encoder,
+            this.context!.getCurrentTexture().createView(),
+          );
+          device.queue.submit([encoder.finish()]);
+          context?.timeline.mark(
+            "first-submitted-frame",
+            "First scene command buffer submitted; visibility unverified",
+          );
+          for (const cb of this.callbacks) cb(performance.now());
+          this.animation = requestAnimationFrame(render);
+        } catch (e) {
+          this.fail(e as Error);
         }
       };
-      worker.postMessage(
-        {
-          type: "start",
-          plyBuffer: buffer,
-          sh_degree: 3,
-          sort: null,
-          memoryPrecision: "f32",
-        },
-        [buffer],
+      render(performance.now());
+      const completionEnd = context?.timeline.begin(
+        "submitted GPU work completion",
+        "gpu-completion-latency",
       );
-    });
-    signal.throwIfAborted();
-    if (this.destroyed) throw Error("Renderer cancelled.");
-    if (!parsed.num_points) throw Error("The PLY contains no Gaussians.");
-    const device = this.device!;
-    const upload = (data: ArrayBuffer) => {
-      if (data.byteLength > device.limits.maxStorageBufferBindingSize)
-        throw Error("Scene exceeds this GPU’s storage buffer limit.");
-      const b = device.createBuffer({
-        size: data.byteLength,
-        usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-      });
-      device.queue.writeBuffer(b, 0, data);
-      return b;
-    };
-    device.pushErrorScope("validation");
-    this.renderer = new this.runtime!.GaussianRenderer(
-      {
-        ...parsed,
-        sh_degree: parsed.final_sh_degree,
-        ply_precision: "f32",
-        gaussian_cpu: new Float32Array(parsed.gaussian_cpu),
-        sh_cpu: new Float32Array(parsed.sh_cpu),
-        gaussian_3d_buffer: upload(parsed.gaussian_cpu),
-        sh_buffer: upload(parsed.sh_cpu),
-      },
-      device,
-      this.format,
-      this.cameraBuffer!,
-      [],
-      false,
-      false,
-      false,
-    );
-    this.runtime!.setCanvasSize(
-      this.canvas!.width,
-      this.canvas!.height,
-      device,
-      this.renderer.render_settings_buffer,
-    );
-    const error = await device.popErrorScope();
-    if (error) throw Error(error.message);
-    if (scene.source === "local") {
-      const min = parsed.boundsMin,
-        max = parsed.boundsMax;
-      if (!min.every(Number.isFinite) || !max.every(Number.isFinite))
-        throw Error("Scene has invalid bounds.");
-      this.controls!.origin.set(
-        (min[0] + max[0]) / 2,
-        (min[1] + max[1]) / 2,
-        (min[2] + max[2]) / 2,
+      await device.queue.onSubmittedWorkDone();
+      completionEnd?.();
+      context?.timeline.mark(
+        "gpu-preparation-complete",
+        "onSubmittedWorkDone resolved, including first frame and any queued work; not execution duration",
       );
-      this.controls!.baseRadius = Math.max(
-        0.1,
-        Math.hypot(
-          (max[0] - min[0]) / 2,
-          (max[1] - min[1]) / 2,
-          (max[2] - min[2]) / 2,
-        ) * 2.2,
-      );
+      signal.throwIfAborted();
+      if (this.fault) throw this.fault;
+      const end = performance.now();
+      return {
+        requestMs: scene.source === "local" ? null : readEnd - start,
+        readMs: scene.source === "local" ? readEnd - start : null,
+        prepareMs: prepared - readEnd,
+        firstFrameMs: end - start,
+        totalMs: end - start,
+        bytes,
+        gaussians: parsed.num_points,
+        heapBefore,
+        heapAfter: heapBytes(),
+      };
+    } catch (e) {
+      this.unload();
+      throw e;
     }
-    this.controls!.normalizeOrigin();
-    const prepared = performance.now();
-    signal.throwIfAborted();
-    if (this.destroyed) throw Error("Renderer cancelled.");
-    const render = (now: number) => {
-      if (this.destroyed || this.fault) return;
-      try {
-        this.controls!.tick(this.previous ? (now - this.previous) / 1000 : 0);
-        this.previous = now;
-        this.writeCamera();
-        const encoder = device.createCommandEncoder();
-        this.renderer!.frame(
-          encoder,
-          this.context!.getCurrentTexture().createView(),
-        );
-        device.queue.submit([encoder.finish()]);
-        for (const cb of this.callbacks) cb(performance.now());
-        this.animation = requestAnimationFrame(render);
-      } catch (e) {
-        this.fail(e as Error);
-      }
-    };
-    render(performance.now());
-    await device.queue.onSubmittedWorkDone();
-    if (this.fault) throw this.fault;
-    const end = performance.now();
-    return {
-      requestMs: scene.source === "local" ? null : readEnd - start,
-      readMs: scene.source === "local" ? readEnd - start : null,
-      prepareMs: prepared - readEnd,
-      firstFrameMs: end - start,
-      totalMs: end - start,
-      bytes,
-      gaussians: parsed.num_points,
-      heapBefore,
-      heapAfter: heapBytes(),
-    };
   }
   resize(w: number, h: number) {
     if (this.canvas) {
@@ -440,8 +685,25 @@ export class WebSplatterAdapter implements RendererAdapter {
   getGpu() {
     return this.gpu;
   }
+  unload() {
+    cancelAnimationFrame(this.animation);
+    this.previous = 0;
+    for (const resource of this.resources) {
+      resource.destroy();
+      this.ledger?.release(resource);
+    }
+    this.resources.clear();
+    for (const b of this.cpuBuffers) this.ledger?.release(b);
+    this.cpuBuffers = [];
+    for (const { type, listener } of this.sceneListeners)
+      this.device?.removeEventListener(type, listener);
+    this.sceneListeners = [];
+    this.renderer = undefined;
+  }
   dispose() {
     this.destroyed = true;
+    this.unload();
+    if (this.cameraBuffer) this.ledger?.release(this.cameraBuffer);
     cancelAnimationFrame(this.animation);
     this.callbacks.clear();
     this.errorCallbacks.clear();

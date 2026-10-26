@@ -1,5 +1,7 @@
 # Measurement conventions — frame-interval-v1
 
+The original warmed-frame methodology below is preserved. New local-only lifecycle suites use a separate schema and measurement protocol; see [Practical benchmarks](practical-benchmarks.md) for repeated loads, delivery simulation, GPU timestamps, allocation coverage, cancellation and cross-format comparison rules. Claims below about absent GPU timings apply to the legacy frame-interval report only.
+
 ## Lifecycle
 
 1. Create a fresh renderer/device when the scene, renderer, API, render scale or locked target changes. The previous app, entity, asset, input listeners and observer are disposed. API changes also replace the canvas, because browser canvases cannot switch context families.

@@ -1,5 +1,10 @@
 import type { CameraPath } from "@/core/types";
 import * as pc from "playcanvas";
+import {
+  rendererCapabilities,
+  type LoadContext,
+  type GpuSample,
+} from "@/core/practical-types";
 import { SceneControls, type NavigationMode, type Rotation } from "./controls";
 import type {
   GraphicsApi,
@@ -40,6 +45,39 @@ export class PlayCanvasAdapter implements RendererAdapter {
   private splat?: pc.Entity;
   private controls?: SceneControls;
   private destroyed = false;
+  private timing = false;
+  private timingVersion = 0;
+  private timings: GpuSample[] = [];
+  capabilities() {
+    const c = rendererCapabilities("PlayCanvas", this.api);
+    const d = this.app?.graphicsDevice as
+      | (pc.GraphicsDevice & {
+          supportsTimestampQuery?: boolean;
+          extDisjointTimerQuery?: unknown;
+        })
+      | undefined;
+    c.gpuTimestamps = {
+      supported: !!(this.api === "webgpu"
+        ? d?.supportsTimestampQuery
+        : d?.extDisjointTimerQuery),
+      reason:
+        this.api === "webgpu"
+          ? "Device timestamp-query feature; deferred engine readback"
+          : "EXT_disjoint_timer_query_webgl2; engine rejects disjoint samples",
+    };
+    return c;
+  }
+  setInstrumentation(enabled: boolean) {
+    this.timing = enabled;
+    this.timings = [];
+    this.timingVersion = this.app?.graphicsDevice.renderVersion ?? 0;
+    if (this.app)
+      this.app.graphicsDevice.gpuProfiler.enabled =
+        enabled && this.capabilities().gpuTimestamps.supported;
+  }
+  async gpuSamples() {
+    return this.timings.splice(0);
+  }
   constructor(readonly api: GraphicsApi) {}
   async initialize(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -85,18 +123,69 @@ export class PlayCanvasAdapter implements RendererAdapter {
       this.camera!.lookAt(target, up);
     });
     app.on("update", (dt: number) => this.controls?.tick(dt));
+    const profiler = device.gpuProfiler;
+    const report = profiler.report.bind(profiler);
+    profiler.report = (version, timings, frameTime) => {
+      report(version, timings, frameTime);
+      if (
+        this.timing &&
+        version >= this.timingVersion &&
+        timings?.length &&
+        profiler.frameTime !== undefined
+      )
+        this.timings.push({
+          stage: "engine GPU frame",
+          durationMs: profiler.frameTime,
+          method:
+            this.api === "webgpu"
+              ? "webgpu-timestamp"
+              : "webgl2-disjoint-query",
+        });
+    };
     app.start();
   }
-  async load(scene: Scene, signal: AbortSignal): Promise<LoadMetrics> {
+  async load(
+    scene: Scene,
+    signal: AbortSignal,
+    context?: LoadContext,
+  ): Promise<LoadMetrics> {
+    if (scene.format !== "ply" && scene.format !== "sog")
+      throw Error(
+        "Requires external read-only provider and a compatible bridge. PlayCanvas supports PLY/SOG only; SSOG is unverified.",
+      );
+    signal.throwIfAborted();
+    this.unload();
     const app = this.app;
     if (!app) throw new Error("Renderer is not initialized.");
     const heapBefore = heapBytes(),
       start = performance.now();
-    const response = await fetch(scene.url, { signal });
-    if (!response.ok)
-      throw new Error(`Scene request failed (${response.status}).`);
-    const blob = await response.blob(),
-      requestEnd = performance.now();
+    context?.onStage?.("delivery");
+    const deliveryEnd = context?.timeline.begin("byte delivery");
+    let blob: Blob;
+    if (context) {
+      const bytes = await context.source.readRange(
+        0,
+        context.source.size,
+        signal,
+      );
+      context.allocations.buffer(bytes);
+      blob = new Blob([bytes]);
+      context.allocations.release(bytes.buffer);
+      context.path = {
+        format: scene.format,
+        decoder: "PlayCanvas asset loader",
+        conversion: "Engine decode/packing (not separately observable)",
+        representation: "PlayCanvas gsplat resources",
+        native: true,
+      };
+    } else {
+      const response = await fetch(scene.url, { signal });
+      if (!response.ok)
+        throw new Error(`Scene request failed (${response.status}).`);
+      blob = await response.blob();
+    }
+    deliveryEnd?.();
+    const requestEnd = performance.now();
     if (signal.aborted || this.destroyed)
       throw new DOMException("Cancelled", "AbortError");
     const url = URL.createObjectURL(blob);
@@ -104,10 +193,20 @@ export class PlayCanvasAdapter implements RendererAdapter {
       url,
       filename: `scene.${scene.format}`,
     }));
+    context?.onStage?.("decode");
+    const preparationEnd = context?.timeline.begin(
+      "engine decode + preparation (inseparable)",
+    );
     try {
+      signal.throwIfAborted();
       await new Promise<void>((resolve, reject) => {
         const abort = () => {
           clean();
+          // Engine parsing is not abortable. Dispose any late resource on arrival.
+          asset.once("load", () => {
+            asset.unload();
+            app.assets.remove(asset);
+          });
           reject(new DOMException("Cancelled", "AbortError"));
         };
         const loaded = () => {
@@ -138,9 +237,29 @@ export class PlayCanvasAdapter implements RendererAdapter {
         | {
             aabb?: pc.BoundingBox;
             numSplats?: number;
-            gsplatData?: { numSplats: number };
+            gsplatData?: { numSplats: number; shBands?: number };
           }
         | undefined;
+      if (
+        context &&
+        resource?.aabb &&
+        resource.gsplatData &&
+        Number.isInteger(resource.gsplatData.shBands)
+      ) {
+        const min = resource.aabb.getMin(),
+          max = resource.aabb.getMax();
+        context.metadata = {
+          splats: resource.gsplatData.numSplats,
+          shDegree: resource.gsplatData.shBands!,
+          bounds: [min.x, min.y, min.z, max.x, max.y, max.z],
+          precision: "Source precision unavailable; engine-managed packing",
+          compression:
+            scene.format === "sog"
+              ? "SOG; encoding settings unavailable"
+              : "PLY; encoding settings unavailable",
+          verifiedBy: "decoder",
+        };
+      }
       if (scene.source === "local" && resource?.aabb) {
         this.controls!.origin.copy(resource.aabb.center);
         this.controls!.baseRadius = Math.max(
@@ -149,7 +268,13 @@ export class PlayCanvasAdapter implements RendererAdapter {
         );
       }
       this.controls!.normalizeOrigin();
+      context?.configureScene?.();
       const prepared = performance.now();
+      preparationEnd?.();
+      context?.timeline.mark(
+        "renderer-prepared",
+        "PlayCanvas asset load and entity creation completed; visibility and GPU completion unverified",
+      );
       await new Promise<void>((resolve, reject) => {
         const done = () => {
           signal.removeEventListener("abort", abort);
@@ -163,6 +288,10 @@ export class PlayCanvasAdapter implements RendererAdapter {
         signal.addEventListener("abort", abort, { once: true });
       });
       const end = performance.now();
+      context?.timeline.mark(
+        "first-submitted-frame",
+        "First engine frameend after entity creation; not proof of visible splats",
+      );
       return {
         requestMs: scene.source === "local" ? null : requestEnd - start,
         readMs: scene.source === "local" ? requestEnd - start : null,
@@ -175,6 +304,10 @@ export class PlayCanvasAdapter implements RendererAdapter {
         heapBefore,
         heapAfter: heapBytes(),
       };
+    } catch (e) {
+      preparationEnd?.();
+      this.unload();
+      throw e;
     } finally {
       URL.revokeObjectURL(url);
     }
@@ -290,12 +423,23 @@ export class PlayCanvasAdapter implements RendererAdapter {
       "Unavailable"
     );
   }
+  onError(callback: (error: Error) => void) {
+    const device = this.app?.graphicsDevice;
+    const lost = () => callback(Error("Graphics device lost"));
+    device?.on("devicelost", lost);
+    return () => device?.off("devicelost", lost);
+  }
+  unload() {
+    this.splat?.destroy();
+    this.splat = undefined;
+    this.asset?.unload();
+    if (this.asset) this.app?.assets.remove(this.asset);
+    this.asset = undefined;
+  }
   dispose() {
     this.destroyed = true;
     this.controls?.dispose();
-    this.splat?.destroy();
-    this.asset?.unload();
-    if (this.asset) this.app?.assets.remove(this.asset);
+    this.unload();
     this.app?.destroy();
     this.app = undefined;
     this.camera = undefined;

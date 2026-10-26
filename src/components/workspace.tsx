@@ -43,6 +43,7 @@ import reference from "../../public/scenes/orbital-v1.json";
 import { Footer, Header, Metric, bytes, ms } from "./ui";
 import { FrameChart, Histogram } from "./charts";
 import { Report } from "./report";
+import { PracticalBenchmarks } from "./practical";
 import { CameraPathEditor } from "./camera-path-editor";
 import { SaveComparison } from "./comparison";
 import { readComparison } from "@/core/comparison";
@@ -106,6 +107,7 @@ export function Workspace() {
     mounted = useRef(true),
     [generation, setGeneration] = useState(0);
   const [renderer, setRenderer] = useState("PlayCanvas");
+  const [practicalOpen, setPracticalOpen] = useState(false);
   const [gridVisible, setGridVisible] = useState(true);
   const [gizmoVisible, setGizmoVisible] = useState(true);
   const [cameraPath, setCameraPath] = useState<CameraPath>();
@@ -165,7 +167,7 @@ export function Workspace() {
         : "A’s settings applied. Load the same scene file as A before running B.",
     );
   }
-  const busy = runBusy || spatialBusy;
+  const busy = runBusy || spatialBusy || practicalOpen;
   busyRef.current = busy;
   useEffect(() => {
     mounted.current = true;
@@ -189,6 +191,7 @@ export function Workspace() {
     [scene],
   );
   useEffect(() => {
+    if (practicalOpen) return;
     const controller = new AbortController();
     let current: RendererAdapter | undefined,
       off: () => void = () => {},
@@ -295,7 +298,7 @@ export function Workspace() {
       current?.dispose();
       if (adapter.current === current) adapter.current = null;
     };
-  }, [api, renderer, scene, scale, generation, lockedTarget]);
+  }, [api, renderer, scene, scale, generation, lockedTarget, practicalOpen]);
   async function loadFile(f: File | undefined) {
     if (!f || busy) return;
     setError("");
@@ -510,6 +513,13 @@ export function Workspace() {
           </select>
         </div>
         <div className="toolbar-spacer" />
+        <button
+          className="button"
+          disabled={busy}
+          onClick={() => setPracticalOpen(true)}
+        >
+          Practical suites
+        </button>
         <span className={`run-status ${busy ? "running" : ""}`}>
           <i className="status-dot" />
           {status}
@@ -1321,6 +1331,19 @@ export function Workspace() {
         </aside>
       </main>
       <Footer />
+      {practicalOpen && (
+        <PracticalBenchmarks
+          onClose={() => setPracticalOpen(false)}
+          initial={{
+            renderer,
+            api,
+            ...dimensions,
+            cameraPath,
+            objectTranslation: translation,
+            objectRotation: rotation,
+          }}
+        />
+      )}
       {report && result && (
         <Report result={result} onClose={() => setReport(false)} />
       )}

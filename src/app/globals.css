@@ -1,5 +1,102 @@
 @import "tailwindcss";
 
+dialog:has(.practical-suite) {
+  width: min(1120px, 95vw);
+  max-width: 95vw;
+}
+.practical-suite {
+  padding: 20px;
+  max-height: 80vh;
+  overflow: auto;
+  line-height: 1.6;
+}
+.practical-suite fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.practical-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+.practical-suite label {
+  display: block;
+  margin: 8px 0;
+  color: var(--muted);
+}
+.practical-suite label > select,
+.practical-suite label > input:not([type="checkbox"]) {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+}
+.practical-suite details {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+}
+.practical-suite summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.practical-suite p {
+  margin: 12px 0;
+  color: var(--muted);
+}
+.practical-suite h3 {
+  font-size: 18px;
+  margin-top: 20px;
+}
+.practical-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+.practical-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+.practical-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.practical-table th,
+.practical-table td {
+  padding: 9px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+.practical-table th {
+  color: var(--muted);
+}
+.practical-canvas:empty {
+  display: none;
+}
+.practical-canvas {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 400px;
+  overflow: hidden;
+  background: #0c0e0d;
+}
+.practical-canvas canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.practical-suite ul {
+  padding-left: 20px;
+  list-style: disc;
+}
+
 :root {
   --bg: #161616;
   --surface: #1d1d1d;
@@ -2548,12 +2645,24 @@ dialog::backdrop {
   font-size: 30px;
   margin: 6px 0;
 }
-.comparison-panel td.comparison-better { color: #8cdda5; }
-.comparison-panel td.comparison-worse { color: #ff9292; }
-.comparison-panel td.comparison-similar { color: #f2d48a; }
-[data-theme="light"] .comparison-panel td.comparison-better { color: #216d3b; }
-[data-theme="light"] .comparison-panel td.comparison-worse { color: #b63131; }
-[data-theme="light"] .comparison-panel td.comparison-similar { color: #86620c; }
+.comparison-panel td.comparison-better {
+  color: #8cdda5;
+}
+.comparison-panel td.comparison-worse {
+  color: #ff9292;
+}
+.comparison-panel td.comparison-similar {
+  color: #f2d48a;
+}
+[data-theme="light"] .comparison-panel td.comparison-better {
+  color: #216d3b;
+}
+[data-theme="light"] .comparison-panel td.comparison-worse {
+  color: #b63131;
+}
+[data-theme="light"] .comparison-panel td.comparison-similar {
+  color: #86620c;
+}
 .comparison-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2714,7 +2823,14 @@ dialog::backdrop {
   flex-wrap: wrap;
 }
 
-.gizmo-toolbar { left: auto; right: 16px; top: 50%; bottom: auto; transform: translateY(-50%); flex-direction: column; }
+.gizmo-toolbar {
+  left: auto;
+  right: 16px;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  flex-direction: column;
+}
 /* Dark menus with high-contrast selection, including in the light shell. */
 select option {
   background: #262626;
@@ -2726,9 +2842,14 @@ select option:not(:disabled):focus-visible {
   background: #b8d8a0;
   color: #182415;
 }
-select option:disabled { color: #a0a29e; }
+select option:disabled {
+  color: #a0a29e;
+}
 @supports (appearance: base-select) {
-  select, select::picker(select) { appearance: base-select; }
+  select,
+  select::picker(select) {
+    appearance: base-select;
+  }
   select::picker(select) {
     background: #262626;
     color: #e8e8e5;
@@ -2738,6 +2859,12 @@ select option:disabled { color: #a0a29e; }
     box-shadow: 0 8px 28px #0006;
     color-scheme: dark;
   }
-  select option { padding: 8px 12px; border-radius: 3px; }
-  select option:focus-visible { outline: 2px solid #e8e8e5; outline-offset: -2px; }
+  select option {
+    padding: 8px 12px;
+    border-radius: 3px;
+  }
+  select option:focus-visible {
+    outline: 2px solid #e8e8e5;
+    outline-offset: -2px;
+  }
 }

@@ -1,5 +1,7 @@
 # WebSplatter integration
 
+Practical lifecycle suites now also use scene-only unload, tracked GPU buffers, feature-detected timestamp queries, and an optional external decoded-attribute bridge. See [practical methodology](practical-benchmarks.md) and [read-only provider protocol](external-provider.md). GPC/SGPC are not bundled formats; SSOG is unverified. The synthetic mock is not a private-format benchmark. Legacy warmed-render measurements below retain their existing schema.
+
 **Status: implemented and browser-tested for uncompressed Gaussian PLY, WebGPU only.**
 
 The adapter runs the actual MIT WebSplatter cull, preprocess, GPU radix-sort and Gaussian draw pipeline, pinned to upstream revision `16bb06e86b8fb12193d4bb4cd2b0b3d4f3ab62be`. See [vendor notes](../vendor/websplatter/README.md) for the exact source subset, attribution and host adaptations. This is not an iframe or another renderer under the WebSplatter name.

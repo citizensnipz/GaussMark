@@ -1,5 +1,7 @@
 # GaussMark
 
+**Practical local benchmarks:** open **Practical suites** in the benchmark workspace for repeated loads, simulated byte delivery, memory/unload cycles, cancellation, GPU timing where supported, and local comparison groups. See [methodology and capability matrix](docs/practical-benchmarks.md) and the [external read-only provider contract](docs/external-provider.md). GPC/SGPC require an authorized provider selected locally; no private implementation or assets are included. Nothing in these suites is submitted to the community API.
+
 [![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-blue)](package.json)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Node.js: 22.16+](https://img.shields.io/badge/Node.js-22.16%2B-339933?logo=nodedotjs&logoColor=white)](#run-locally)

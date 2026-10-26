@@ -172,6 +172,10 @@ export type CommunityRecord = z.infer<typeof submissionSchema> & {
   receivedAt?: string;
 };
 export function submissionPayload(r: BenchmarkResult): CommunityRecord {
+  if ("localOnly" in r || "schema" in r)
+    throw Error(
+      "Practical suites are local-only; incompatible community schema.",
+    );
   const { frames: _, invalidReason: __, ...rest } = r;
   // File hashes are used locally for A/B matching; keep custom hashes off the community API.
   return submissionSchema.parse({

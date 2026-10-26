@@ -1,5 +1,28 @@
 # Initial build validation
 
+## Practical-suite extension — 2026-10-27 (Asia/Taipei)
+
+- `npm test`: **42 tests passed in 8 files**. Covers shared bandwidth/ranges/cache/backpressure/cancellation, overlapping and incomplete spans, stale callbacks, buffer identity/transfers/cleanup, provider handshake/mock/abort/error privacy, unsupported capabilities, comparison rules, serialization and legacy result readability.
+- `npm run typecheck`: frontend and Worker passed. `npm run build`: production static export passed. The restricted Windows environment intermittently returned `EPERM` while creating `.next` directories; the build passed with normal filesystem access. A prior generated cache was preserved in ignored `.tmp/next-before-practical-validation` during diagnosis.
+- **17 Playwright tests passed, serially, against the production export in installed Chrome**. Final validation used port 3018 and an isolated local D1 directory `.tmp/practical-e2e-final-db`. Earlier attempts encountered stale asset responses on a reused restricted preview port and an exhausted local API rate bucket; the final isolated run passed the actual local Worker submission/validation/rate-limit test as well.
+- Browser coverage includes existing warmed render passes, WebGL2/WebGPU, camera paths/transforms, themes/layout, local files, strict same-file A/B, consent/export, plus repeated lifecycle loads, reused-renderer unloading, simulated delivery cancellation and replacement, cancellation at decode/GPU-preparation entry, capability-gated editor results, and the public synthetic WebGPU attribute bridge. The bridge returned tracked GPU allocation to its persistent 272-byte camera buffer after scene unload, and cancelled fresh-device attempts retained no tracked worker/GPU buffers at the checkpoint.
+- `npm run check:public`: passed for tracked files, source/fixture/vendor/documentation trees, public files and generated export/server bundles. It found an existing absolute build-machine URL fallback in PlayCanvas; the narrowly scoped webpack loader now uses a runtime URL fallback. This heuristic scan **cannot certify NDA compliance**. No private provider, private implementation or private encoded asset was supplied, copied, generated or benchmarked.
+- Screenshots generated from public fixtures were visually inspected; the tests' changes to tracked reference screenshots were restored. The practical result screenshot remains under ignored `test-results/practical-production.png`.
+
+Reproduce with a fresh local-only database directory if rerunning the rate-limit test within the same hour:
+
+```sh
+npm run build
+node scripts/wrangler.mjs d1 migrations apply gaussmark --local --persist-to .tmp/practical-e2e-new-db
+node scripts/wrangler.mjs dev --ip 127.0.0.1 --port 3018 --persist-to .tmp/practical-e2e-new-db
+# In another Git Bash terminal:
+TEST_BASE_URL=http://127.0.0.1:3018 TEST_NO_SERVER=1 npm run test:e2e
+```
+
+These checks establish functional behavior, not hardware rankings or GPC/SGPC advantages. Actual private providers, SSOG decoding, spatial streaming, concurrent scenes, splat editing, visible-content/full-quality readiness, physical VRAM reclamation, and optional image-quality comparison were **not validated**. They remain unavailable or require a genuine provider/renderer integration as documented in [the practical methodology](practical-benchmarks.md).
+
+---
+
 Validation performed locally on **2026-10-26 (Asia/Taipei)**. Windows host, installed Google Chrome, NVIDIA GeForce RTX 5070 reported through ANGLE. No public deployment, cloud database, DNS or account changes were made.
 
 ## Automated checks
