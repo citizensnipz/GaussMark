@@ -1,0 +1,44 @@
+{
+  "name": "gaussmark",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -n web,api \"next dev --webpack -H 127.0.0.1 -p 3005\" \"node scripts/wrangler.mjs dev --assets public --ip 127.0.0.1 --port 3015\"",
+    "build": "next build --webpack",
+    "preview": "node scripts/wrangler.mjs dev --ip 127.0.0.1 --port 3015",
+    "typecheck": "tsc --noEmit && tsc -p worker/tsconfig.json",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:rust": "cargo test --manifest-path crates/gaussmark-core/Cargo.toml",
+    "build:wasm": "wasm-pack build crates/gaussmark-core --target web --out-dir ../../public/wasm --release --no-pack && node scripts/finalize-wasm.mjs",
+    "scene": "node scripts/generate-scene.mjs",
+    "db:migrate": "node scripts/wrangler.mjs d1 migrations apply gaussmark --local",
+    "format": "prettier --write src worker tests scripts *.ts *.mjs *.json *.jsonc"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "next": "16.4.3",
+    "playcanvas": "2.23.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261019.1",
+    "@playwright/test": "^1.56.0",
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "concurrently": "^9.2.1",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5",
+    "wasm-pack": "0.15.0",
+    "wrangler": "^4.45.0"
+  },
+  "overrides": {
+    "undici": "^7.30.1"
+  }
+}

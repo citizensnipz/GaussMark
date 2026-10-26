@@ -1,0 +1,11 @@
+{
+  "id": "orbital",
+  "version": "1",
+  "name": "Orbital study",
+  "license": "MIT",
+  "source": "scripts/generate-scene.mjs",
+  "seed": 42,
+  "gaussians": 47000,
+  "bytes": 3196478,
+  "sha256": "8f0e4f0a83f7b5a92b25f3f214cd4efc4f885966c4652e27a35313b6455c7a13"
+}

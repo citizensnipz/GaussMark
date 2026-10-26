@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+.wrangler/
+target/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.env*
+!.env.example
+.dev.vars
+public/wasm/package.json
