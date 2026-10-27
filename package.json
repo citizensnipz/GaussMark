@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "external:runner": "node scripts/external-runner.mjs",
     "dev": "concurrently -k -n web,api \"next dev --webpack -H 127.0.0.1 -p 3005\" \"node scripts/wrangler.mjs dev --assets public --ip 127.0.0.1 --port 3015\"",
     "build": "next build --webpack",
     "preview": "node scripts/wrangler.mjs dev --ip 127.0.0.1 --port 3015",

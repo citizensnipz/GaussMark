@@ -18,6 +18,7 @@ export interface ReadOnlyProvider {
   readonly version: string;
   readonly formats: GaussianFormat[];
   readonly synthetic: boolean;
+  readonly execution?: "browser-worker" | "local-service";
   decode(
     source: ByteSource,
     format: GaussianFormat,
@@ -160,6 +161,7 @@ export function mockProvider(): ReadOnlyProvider {
 
 /** Explicitly selected, self-contained worker file. Its bytes never enter a build or persistence. */
 export class LocalWorkerProvider implements ReadOnlyProvider {
+  execution: "browser-worker" | "local-service" = "browser-worker";
   version = "external-local-v1";
   formats: GaussianFormat[] = [];
   readonly synthetic = false;
@@ -208,6 +210,8 @@ export class LocalWorkerProvider implements ReadOnlyProvider {
           return;
         }
         this.formats = [...new Set(m.formats)] as GaussianFormat[];
+        this.execution =
+          m.execution === "local-service" ? "local-service" : "browser-worker";
         // Only a non-identifying semantic version explicitly marked public can be exported.
         if (
           m.publicVersion === true &&

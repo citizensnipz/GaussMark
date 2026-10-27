@@ -310,7 +310,9 @@ export class WebSplatterAdapter implements RendererAdapter {
           format: scene.format,
           decoder: context.provider.synthetic
             ? "Public synthetic provider"
-            : "External read-only provider",
+            : context.provider.execution === "local-service"
+              ? "Local Python service via external worker (includes loopback transfer, process startup, temporary file I/O and decode; server memory untracked)"
+              : "External read-only provider",
           providerVersion: context.provider.version,
           conversion:
             "Decoded position/opacity/covariance/SH to public WebSplatter f32 layout; SH degree preserved",

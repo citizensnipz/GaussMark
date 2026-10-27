@@ -12,7 +12,7 @@ import {
   Activity,
 } from "lucide-react";
 // Lucide GPU icon, ISC license: https://github.com/lucide-icons/lucide/blob/main/icons/gpu.svg
-const Gpu = createLucideIcon("Gpu", [
+export const Gpu = createLucideIcon("Gpu", [
   ["path", { d: "M2 17h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H2", key: "board" }],
   ["path", { d: "M2 21V3", key: "bracket" }],
   ["path", { d: "M7 17v3a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-3", key: "connector" }],

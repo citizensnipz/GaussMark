@@ -32,6 +32,7 @@ it("handshakes declared support, routes range reads and tears down a public test
               formats: ["ply"],
               version: "1.2.3",
               publicVersion: true,
+              execution: "local-service",
             },
           });
         if (m.type === "decode")
@@ -54,6 +55,7 @@ it("handshakes declared support, routes range reads and tears down a public test
   await provider.connect();
   expect(provider.formats).toEqual(["ply"]);
   expect(provider.version).toBe("1.2.3");
+  expect(provider.execution).toBe("local-service");
   const source = new LocalByteSource(
     new Blob([new Uint8Array([0, 1, 2, 3, 4, 5])]),
   );

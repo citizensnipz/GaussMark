@@ -26,6 +26,16 @@ The provider replies:
 
 Accepted format identifiers are `ply`, `sog`, `ssog`, `gpc`, `sgpc`. The host does not infer support from file extension. It records the provider's declaration, not an independent verification. Only public semantic versions are exported; other provider identifiers are omitted. Handshake timeout is 10 seconds. The handshake worker is terminated before benchmarking.
 
+An optional `execution: "local-service"` capability identifies a worker that delegates decoding to a separately installed loopback service. The UI and exported pipeline description label this path explicitly. Omitting it retains the browser-worker default. The declaration is provider-reported, not independently verified.
+
+### Local Python bridge
+
+Keep the service, codec checkout, Python environment, generated provider and test inputs outside this repository. Start the separately installed service, then open a local GaussMark preview, expand **Practical suites → External read-only provider**, and select the service's generated JavaScript provider. Select a GPC file as **Scene A** and run **Website initial load**. A successful handshake selects WebSplatter/WebGPU automatically. A restarted service generates a new credential: remove and reselect the provider. Closing the dialog also requires selecting it again.
+
+The local bridge uses authenticated loopback HTTP, an explicit origin allowlist, sequential bounded uploads and one active job. Decode runs in a separate Python process. Worker termination stops lease renewals; abandoned jobs are killed and their temporary files removed after the lease expires, rather than synchronously with browser cancellation. The service's local instructions specify the expiry and input-size limit. The generated provider contains a session credential; do not share it.
+
+This is a whole-scene local-service measurement. The external-decode span includes byte-source delivery, loopback upload/download, Python process startup, codec decoding, temporary decoded PLY I/O and conversion to public attributes. It does not isolate codec CPU time. Python memory, temporary disk space and HTTP buffers are outside the browser allocation ledger. Do not compare its browser memory values as total application memory against browser-only decoders. GaussMark's browser-side attribute interleaving remains a separate conversion span. The bridge does not establish native compressed rendering, progressive loading, SGPC support or image-quality equivalence.
+
 ## Decode
 
 Each measured decode uses a fresh worker. The host sends:

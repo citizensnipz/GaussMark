@@ -171,3 +171,10 @@ Choose **Freeze current view** to capture the exact position, target and up vect
 ### Centering and grid
 
 Scenes use their bounding-box center as the working origin, without modifying the original file. **Center the object** in the viewport toolbar reframes that center; **Grid** toggles the reference grid independently of rotation handles. **Center circle on object** moves the orbit center to the object pivot and preserves radius, camera height, and start angle. Bounds are an estimate and can be affected by stray splats. Camera presets now use centered coordinates; save a new setup for scenes previously saved with source-file coordinates.
+
+## External viewer benchmarks
+
+Choose **External Link** in the renderer menu and start
+`npm run external:runner` locally. Pair using the terminal token, then supply
+one or two viewer/share links. See [External Link benchmarks](docs/external-link.md)
+for measured fields, privacy rules and the optional private viewer integration.

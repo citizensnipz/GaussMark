@@ -40,10 +40,11 @@ import type {
   Telemetry,
 } from "@/core/types";
 import reference from "../../public/scenes/orbital-v1.json";
-import { Footer, Header, Metric, bytes, ms } from "./ui";
+import { Footer, Gpu, Header, Metric, bytes, ms } from "./ui";
 import { FrameChart, Histogram } from "./charts";
 import { Report } from "./report";
 import { PracticalBenchmarks } from "./practical";
+import { ExternalLink } from "./external-link";
 import { CameraPathEditor } from "./camera-path-editor";
 import { SaveComparison } from "./comparison";
 import { readComparison } from "@/core/comparison";
@@ -62,7 +63,7 @@ const categories: { name: Category; icon: typeof Activity }[] = [
   { name: "Overview", icon: Layers },
   { name: "Streaming", icon: ArrowDownToLine },
   { name: "CPU", icon: Cpu },
-  { name: "GPU", icon: Box },
+  { name: "GPU", icon: Gpu },
   { name: "Memory", icon: MemoryStick },
   { name: "Motion", icon: Route },
   { name: "Spatial", icon: Move3D },
@@ -191,7 +192,7 @@ export function Workspace() {
     [scene],
   );
   useEffect(() => {
-    if (practicalOpen) return;
+    if (practicalOpen || renderer === "External Link") return;
     const controller = new AbortController();
     let current: RendererAdapter | undefined,
       off: () => void = () => {},
@@ -443,6 +444,7 @@ export function Workspace() {
           >
             <option>PlayCanvas</option>
             <option>WebSplatter</option>
+            <option>External Link</option>
           </select>
         </div>
         <div className="toolbar-field">
@@ -1331,6 +1333,9 @@ export function Workspace() {
         </aside>
       </main>
       <Footer />
+      {renderer === "External Link" && (
+        <ExternalLink onClose={() => setRenderer("PlayCanvas")} />
+      )}
       {practicalOpen && (
         <PracticalBenchmarks
           onClose={() => setPracticalOpen(false)}

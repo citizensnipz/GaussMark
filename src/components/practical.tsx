@@ -517,7 +517,7 @@ export function PracticalBenchmarks({
                     await p.connect();
                     if (provider.current !== p) return;
                     setProviderKind(
-                      `external read-only; declares ${p.formats.join(", ")}`,
+                      `external read-only; declares ${p.formats.join(", ")}; ${p.execution === "local-service" ? "local Python service — transfer, process startup and file I/O included; server memory untracked" : "browser worker"}`,
                     );
                     setRenderer("WebSplatter");
                     setApi("webgpu");
